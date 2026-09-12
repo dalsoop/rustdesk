@@ -221,6 +221,34 @@ jobs:
           popd
           mkdir -p signed-apk; pushd signed-apk
           mv ../rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk .
+          popd
+
+      - name: Sign APK with V2/V3 Scheme
+        shell: bash
+        run: |
+          keytool -genkeypair -v -keystore release.jks -alias rustdesk \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass 123456 -keypass 123456 \
+            -dname "CN=RustDesk, OU=Mobile, O=Dalsoop, L=Seoul, ST=Seoul, C=KR"
+
+          BUILD_TOOL_PATH=$(ls -d /usr/local/lib/android/sdk/build-tools/* | tail -n 1)
+          echo "Using apksigner from: $BUILD_TOOL_PATH"
+
+          for apk in signed-apk/*.apk; do
+            echo "Signing $apk"
+            $BUILD_TOOL_PATH/apksigner sign \
+              --ks release.jks \
+              --ks-pass pass:123456 \
+              --key-pass pass:123456 \
+              --ks-key-alias rustdesk \
+              --v1-signing-enabled true \
+              --v2-signing-enabled true \
+              --v3-signing-enabled true \
+              "$apk"
+
+            echo "Verifying $apk"
+            $BUILD_TOOL_PATH/apksigner verify --verbose "$apk"
+          done
 
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
