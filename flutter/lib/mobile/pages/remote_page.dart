@@ -62,8 +62,8 @@ class RemotePage extends StatefulWidget {
 }
 
 /// Input method state the open session last set on the host; null when unknown
-/// (not set yet, or the "한/영" button toggled it). One remote page is open at a
-/// time on mobile.
+/// (not set yet, or the "한/영" button toggled it). Only decides whether to wait
+/// after a switch key. One remote page is open at a time on mobile.
 RemoteImeMode? _remoteImeMode;
 
 class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
@@ -413,18 +413,23 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   /// Sends F19 (Korean) or F24 (English) when the host must change mode for
   /// the next keys. See hangul_dubeolsik.dart for the host side.
-  /// The host's input method applies the switch after the key arrives, so the
-  /// next keys wait [kRemoteImeSwitchDelay]; sent at once, the first jamo was
-  /// still typed in the old mode (안 -> dㅏㄴ).
+  /// The key goes before every edit, so the host follows even when its mode
+  /// was changed from elsewhere (its own keyboard, the "한/영" button); in the
+  /// right mode already, the key does nothing. The host's input method applies
+  /// a switch after the key arrives, so on a change the next keys wait
+  /// [kRemoteImeSwitchDelay]; sent at once, the first jamo was still typed in
+  /// the old mode (안 -> dㅏㄴ).
   Future<void> _setRemoteImeMode(RemoteImeMode? mode) async {
-    if (mode == null || mode == _remoteImeMode) return;
+    if (mode == null) return;
     final usbHid = mode == RemoteImeMode.korean
         ? kUsbHidHangulStart
         : kUsbHidHangulEnd;
     inputModel.newKeyboardMode('', usbHid, true, false);
     inputModel.newKeyboardMode('', usbHid, false, false);
-    _remoteImeMode = mode;
-    await Future.delayed(kRemoteImeSwitchDelay);
+    if (mode != _remoteImeMode) {
+      _remoteImeMode = mode;
+      await Future.delayed(kRemoteImeSwitchDelay);
+    }
   }
 
   // handle mobile virtual keyboard

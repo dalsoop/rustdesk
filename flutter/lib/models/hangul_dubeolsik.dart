@@ -7,7 +7,8 @@
 // (fcitx5, ibus) compose the syllables, the same way a physical keyboard does.
 // The host's input method must be in Korean mode for the keys to compose, and
 // in English mode for Latin letters. A toggle key cannot set a known state, so
-// the client sends F19 before Korean and F24 before Latin letters; a host maps
+// the client sends F19 before every Korean edit and F24 before every edit with
+// Latin letters; a host maps
 // them to Hangul_Start and Hangul_End and binds those to its input method's
 // activate and deactivate keys (fcitx5 ActivateKeys / DeactivateKeys). On a
 // host without that mapping both keys do nothing and the "한/영" key bar
