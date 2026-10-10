@@ -66,6 +66,10 @@ class RemotePage extends StatefulWidget {
 /// after a switch key. One remote page is open at a time on mobile.
 RemoteImeMode? _remoteImeMode;
 
+/// Whether the last edit sent Korean keys, i.e. the host may be composing a
+/// syllable that another F19 would cut short.
+bool _inKoreanRun = false;
+
 class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Timer? _timer;
   bool _showBar = !isWebDesktop;
@@ -102,6 +106,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _remoteImeMode = null;
+    _inKoreanRun = false;
     gFFI.ffiModel.updateEventListener(sessionId, widget.id);
     gFFI.start(
       widget.id,
@@ -386,7 +391,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       for (var k = 0; k < keyEdit.backspaces; k++) {
         inputModel.inputKey('VK_BACK');
       }
-      await _setRemoteImeMode(remoteImeModeFor(edit.insert));
+      await _setRemoteImeMode(edit.insert);
       for (final key in keyEdit.keys.split('')) {
         inputChar(key);
       }
@@ -398,7 +403,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (edit.insert.isEmpty) {
       return;
     }
-    await _setRemoteImeMode(remoteImeModeFor(edit.insert));
+    await _setRemoteImeMode(edit.insert);
     if (isAutoInsertedBracketPair(effectiveOld, edit.backspaces, edit.insert)) {
       bind.sessionInputString(sessionId: sessionId, value: edit.insert);
       _openKeyboardUnlocked();
@@ -411,19 +416,30 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
   }
 
-  /// Sends F19 (Korean) or F24 (English) when the host must change mode for
-  /// the next keys. See hangul_dubeolsik.dart for the host side.
-  /// The key goes before every edit, so the host follows even when its mode
-  /// was changed from elsewhere (its own keyboard, the "한/영" button); in the
-  /// right mode already, the key does nothing. The host's input method applies
-  /// a switch after the key arrives, so on a change the next keys wait
-  /// [kRemoteImeSwitchDelay]; sent at once, the first jamo was still typed in
-  /// the old mode (안 -> dㅏㄴ).
-  Future<void> _setRemoteImeMode(RemoteImeMode? mode) async {
-    if (mode == null) return;
-    final usbHid = mode == RemoteImeMode.korean
-        ? kUsbHidHangulStart
-        : kUsbHidHangulEnd;
+  /// Puts the host in the mode [insert] needs before its keys go out. F24 goes before every edit
+  /// with Latin letters, which never compose. F19 goes when a run of Korean
+  /// starts (after a space, a digit, Latin letters, ...), because the host
+  /// commits the syllable being composed when it gets F19 again (한글 ->
+  /// ㅎㅏㄴㄱㅡㄹ). Either way a mode changed from elsewhere (the host's own
+  /// keyboard, the "한/영" button) is put right by the next word. The host's
+  /// input method applies a switch after the key arrives, so on a change the
+  /// next keys wait [kRemoteImeSwitchDelay]; sent at once, the first jamo was
+  /// still typed in the old mode (안 -> dㅏㄴ).
+  /// See hangul_dubeolsik.dart for the host side.
+  Future<void> _setRemoteImeMode(String insert) async {
+    // Deleting keeps the run: the host is still composing the syllable.
+    if (insert.isEmpty) return;
+    final mode = remoteImeModeFor(insert);
+    final korean = mode == RemoteImeMode.korean;
+    if (mode == null) {
+      // A space, digit or punctuation ends the syllable on the host.
+      _inKoreanRun = false;
+      return;
+    }
+    final send = mode == RemoteImeMode.latin || (korean && !_inKoreanRun);
+    _inKoreanRun = korean;
+    if (!send) return;
+    final usbHid = korean ? kUsbHidHangulStart : kUsbHidHangulEnd;
     inputModel.newKeyboardMode('', usbHid, true, false);
     inputModel.newKeyboardMode('', usbHid, false, false);
     if (mode != _remoteImeMode) {
@@ -1034,6 +1050,7 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
   void _sendKoreanToggle() {
     final input = gFFI.inputModel;
     _remoteImeMode = null;
+    _inKoreanRun = false;
     switch (_koreanToggleKey) {
       case KoreanToggleKey.hangul:
         input.inputKey('VK_HANGUL');
