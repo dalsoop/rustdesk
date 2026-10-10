@@ -43,6 +43,10 @@ const int kUsbHidHangulStart = 0x6E;
 /// USB HID usage (keyboard page 0x07) of F24, sent before Latin letters.
 const int kUsbHidHangulEnd = 0x73;
 
+/// How long the client waits after F19/F24 before the next keys, so the host's
+/// input method has switched when they arrive.
+const Duration kRemoteImeSwitchDelay = Duration(milliseconds: 150);
+
 /// Input method state the host needs for a run of Dubeolsik keys.
 enum RemoteImeMode { korean, latin }
 

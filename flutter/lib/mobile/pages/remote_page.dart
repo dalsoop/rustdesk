@@ -344,22 +344,15 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final effectiveOld = clipboardAdjustedOldValue(_value, newValue);
     _value = newValue;
     final edit = computeSoftKeyboardEditDetailed(effectiveOld, newValue);
-    final dubeolsik = useDubeolsikKeys(
+    if (useDubeolsikKeys(
         koreanInputModeFromOption(
             bind.mainGetLocalOption(key: kOptionKoreanInputMode)),
-        gFFI.ffiModel.pi.platform);
-    if (dubeolsik &&
-        (containsHangul(edit.deleted) || containsHangul(edit.insert))) {
-      // The host cannot type Hangul text (e.g. Linux on Wayland): send the
-      // Dubeolsik keys and let the host's input method compose them.
-      final keyEdit = dubeolsikKeyEdit(edit.deleted, edit.insert);
-      for (var k = 0; k < keyEdit.backspaces; k++) {
-        inputModel.inputKey('VK_BACK');
-      }
-      _setRemoteImeMode(remoteImeModeFor(edit.insert));
-      for (final key in keyEdit.keys.split('')) {
-        inputChar(key);
-      }
+        gFFI.ffiModel.pi.platform)) {
+      // Edits go out one after another, so the pause after switching the
+      // host's input method also holds back what is typed during it.
+      _dubeolsikSends = _dubeolsikSends
+          .then((_) => _sendDubeolsikEdit(effectiveOld, edit))
+          .catchError((Object e) => debugPrint('soft keyboard send: $e'));
       return;
     }
     for (var k = 0; k < edit.backspaces; k++) {
@@ -367,9 +360,6 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
     if (edit.insert.isEmpty) {
       return;
-    }
-    if (dubeolsik) {
-      _setRemoteImeMode(remoteImeModeFor(edit.insert));
     }
     if (isAutoInsertedBracketPair(effectiveOld, edit.backspaces, edit.insert)) {
       // can not only input insert[0], because when input ], [ are also auto insert, which cause ] never be input
@@ -384,9 +374,49 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _dubeolsikSends = Future.value();
+
+  /// Sends one soft-keyboard edit to a host that composes Korean itself.
+  Future<void> _sendDubeolsikEdit(String effectiveOld,
+      ({int backspaces, String insert, String deleted}) edit) async {
+    if (containsHangul(edit.deleted) || containsHangul(edit.insert)) {
+      // The host cannot type Hangul text (e.g. Linux on Wayland): send the
+      // Dubeolsik keys and let the host's input method compose them.
+      final keyEdit = dubeolsikKeyEdit(edit.deleted, edit.insert);
+      for (var k = 0; k < keyEdit.backspaces; k++) {
+        inputModel.inputKey('VK_BACK');
+      }
+      await _setRemoteImeMode(remoteImeModeFor(edit.insert));
+      for (final key in keyEdit.keys.split('')) {
+        inputChar(key);
+      }
+      return;
+    }
+    for (var k = 0; k < edit.backspaces; k++) {
+      inputModel.inputKey('VK_BACK');
+    }
+    if (edit.insert.isEmpty) {
+      return;
+    }
+    await _setRemoteImeMode(remoteImeModeFor(edit.insert));
+    if (isAutoInsertedBracketPair(effectiveOld, edit.backspaces, edit.insert)) {
+      bind.sessionInputString(sessionId: sessionId, value: edit.insert);
+      _openKeyboardUnlocked();
+      return;
+    }
+    if (edit.insert.length > 1) {
+      bind.sessionInputString(sessionId: sessionId, value: edit.insert);
+    } else {
+      inputChar(edit.insert);
+    }
+  }
+
   /// Sends F19 (Korean) or F24 (English) when the host must change mode for
   /// the next keys. See hangul_dubeolsik.dart for the host side.
-  void _setRemoteImeMode(RemoteImeMode? mode) {
+  /// The host's input method applies the switch after the key arrives, so the
+  /// next keys wait [kRemoteImeSwitchDelay]; sent at once, the first jamo was
+  /// still typed in the old mode (안 -> dㅏㄴ).
+  Future<void> _setRemoteImeMode(RemoteImeMode? mode) async {
     if (mode == null || mode == _remoteImeMode) return;
     final usbHid = mode == RemoteImeMode.korean
         ? kUsbHidHangulStart
@@ -394,6 +424,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     inputModel.newKeyboardMode('', usbHid, true, false);
     inputModel.newKeyboardMode('', usbHid, false, false);
     _remoteImeMode = mode;
+    await Future.delayed(kRemoteImeSwitchDelay);
   }
 
   // handle mobile virtual keyboard
