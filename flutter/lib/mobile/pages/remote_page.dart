@@ -19,6 +19,7 @@ import '../../common/widgets/overlay.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/remote_input.dart';
 import '../../models/input_model.dart';
+import '../../models/hangul_dubeolsik.dart';
 import '../../models/korean_toggle_key.dart';
 import '../../models/model.dart';
 import '../../models/soft_keyboard_input_utils.dart';
@@ -336,7 +337,23 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     // helper backspaces the changed tail then retypes it, which converges regardless.
     final effectiveOld = clipboardAdjustedOldValue(_value, newValue);
     _value = newValue;
-    final edit = computeSoftKeyboardEdit(effectiveOld, newValue);
+    final edit = computeSoftKeyboardEditDetailed(effectiveOld, newValue);
+    if ((containsHangul(edit.deleted) || containsHangul(edit.insert)) &&
+        useDubeolsikKeys(
+            koreanInputModeFromOption(
+                bind.mainGetLocalOption(key: kOptionKoreanInputMode)),
+            gFFI.ffiModel.pi.platform)) {
+      // The host cannot type Hangul text (e.g. Linux on Wayland): send the
+      // Dubeolsik keys and let the host's input method compose them.
+      final keyEdit = dubeolsikKeyEdit(edit.deleted, edit.insert);
+      for (var k = 0; k < keyEdit.backspaces; k++) {
+        inputModel.inputKey('VK_BACK');
+      }
+      for (final key in keyEdit.keys.split('')) {
+        inputChar(key);
+      }
+      return;
+    }
     for (var k = 0; k < edit.backspaces; k++) {
       inputModel.inputKey('VK_BACK');
     }
@@ -983,32 +1000,50 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
     }
   }
 
+  /// Long press on "한/영": which key it sends, and how Korean text is sent.
   Future<void> _pickKoreanToggleKey() async {
-    final current = _koreanToggleKey;
-    final picked = await showDialog<KoreanToggleKey>(
+    final currentKey = _koreanToggleKey;
+    final currentMode = koreanInputModeFromOption(
+        bind.mainGetLocalOption(key: kOptionKoreanInputMode));
+    Widget option(String label, bool selected, Object value) =>
+        SimpleDialogOption(
+          onPressed: () => Navigator.pop(context, value),
+          child: Row(children: [
+            Icon(selected
+                ? Icons.radio_button_checked
+                : Icons.radio_button_unchecked),
+            SizedBox(width: 8),
+            Flexible(child: Text(label)),
+          ]),
+        );
+    final picked = await showDialog<Object>(
       context: context,
       builder: (context) => SimpleDialog(
-        title: Text('한/영 버튼이 보낼 키'),
+        title: Text('한/영 설정'),
         children: [
+          Padding(
+              padding: EdgeInsets.fromLTRB(24, 0, 24, 4),
+              child: Text('한/영 버튼이 보낼 키',
+                  style: TextStyle(fontWeight: FontWeight.bold))),
           for (final key in KoreanToggleKey.values)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, key),
-              child: Row(children: [
-                Icon(key == current
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_unchecked),
-                SizedBox(width: 8),
-                Text(koreanToggleKeyLabel(key)),
-              ]),
-            ),
+            option(koreanToggleKeyLabel(key), key == currentKey, key),
+          Padding(
+              padding: EdgeInsets.fromLTRB(24, 12, 24, 4),
+              child: Text('한글 보내는 방식',
+                  style: TextStyle(fontWeight: FontWeight.bold))),
+          for (final mode in KoreanInputMode.values)
+            option(koreanInputModeLabel(mode), mode == currentMode, mode),
         ],
       ),
     );
-    if (picked != null && picked != current) {
+    if (picked is KoreanToggleKey && picked != currentKey) {
       await bind.mainSetLocalOption(
           key: kOptionKoreanToggleKey, value: picked.name);
-      setState(() {});
+    } else if (picked is KoreanInputMode && picked != currentMode) {
+      await bind.mainSetLocalOption(
+          key: kOptionKoreanInputMode, value: picked.name);
     }
+    if (mounted) setState(() {});
   }
 
   _updateRect() {

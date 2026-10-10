@@ -14,6 +14,14 @@
 /// mutation (ㅁ→마→만 — same UTF-16 length) is handled instead of silently dropped.
 ({int backspaces, String insert}) computeSoftKeyboardEdit(
     String oldValue, String newValue) {
+  final edit = computeSoftKeyboardEditDetailed(oldValue, newValue);
+  return (backspaces: edit.backspaces, insert: edit.insert);
+}
+
+/// Same diff as [computeSoftKeyboardEdit], also returning the removed tail (`deleted`) so callers
+/// can re-express the edit in other units, e.g. Dubeolsik keys for hosts that cannot type Unicode.
+({int backspaces, String insert, String deleted}) computeSoftKeyboardEditDetailed(
+    String oldValue, String newValue) {
   // Align the diff window to the text after the last sentinel '1' in each string.
   var i = newValue.length - 1;
   for (; i >= 0 && newValue[i] != '1'; --i) {}
@@ -33,8 +41,8 @@
 
   final insert =
       subNewValue.length > common ? subNewValue.substring(common) : '';
-  final backspaces = subOldValue.length - common;
-  return (backspaces: backspaces, insert: insert);
+  final deleted = subOldValue.substring(common);
+  return (backspaces: deleted.length, insert: insert, deleted: deleted);
 }
 
 /// Reproduces the Android clipboard guard (remote_page.dart ~331-337): when the sentinel-prefixed
