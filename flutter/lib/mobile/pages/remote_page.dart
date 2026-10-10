@@ -19,6 +19,7 @@ import '../../common/widgets/overlay.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/remote_input.dart';
 import '../../models/input_model.dart';
+import '../../models/korean_toggle_key.dart';
 import '../../models/model.dart';
 import '../../models/soft_keyboard_input_utils.dart';
 import '../../models/platform_model.dart';
@@ -928,7 +929,7 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
   InputModel get inputModel => gFFI.inputModel;
 
   Widget wrap(String text, void Function() onPressed,
-      {bool? active, IconData? icon}) {
+      {bool? active, IconData? icon, void Function()? onLongPress}) {
     return TextButton(
         style: TextButton.styleFrom(
           minimumSize: Size(0, 0),
@@ -945,7 +946,69 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
             ? Icon(icon, size: 14, color: Colors.white)
             : Text(translate(text),
                 style: TextStyle(color: Colors.white, fontSize: 11)),
-        onPressed: onPressed);
+        onPressed: onPressed,
+        onLongPress: onLongPress);
+  }
+
+  KoreanToggleKey get _koreanToggleKey => koreanToggleKeyFromOption(
+      bind.mainGetLocalOption(key: kOptionKoreanToggleKey));
+
+  /// Sends one press and release of the key the remote side uses to switch
+  /// Korean/English. Modifier toggles the user left on are kept as they were.
+  void _sendKoreanToggle() {
+    final input = gFFI.inputModel;
+    switch (_koreanToggleKey) {
+      case KoreanToggleKey.hangul:
+        input.inputKey('VK_HANGUL');
+        break;
+      case KoreanToggleKey.f18:
+        input.newKeyboardMode('', kUsbHidF18, true, false);
+        input.newKeyboardMode('', kUsbHidF18, false, false);
+        break;
+      case KoreanToggleKey.rightAlt:
+        input.inputKey('RAlt');
+        break;
+      case KoreanToggleKey.shiftSpace:
+        final old = input.shift;
+        input.shift = true;
+        input.inputKey('VK_SPACE');
+        input.shift = old;
+        break;
+      case KoreanToggleKey.ctrlSpace:
+        final old = input.ctrl;
+        input.ctrl = true;
+        input.inputKey('VK_SPACE');
+        input.ctrl = old;
+        break;
+    }
+  }
+
+  Future<void> _pickKoreanToggleKey() async {
+    final current = _koreanToggleKey;
+    final picked = await showDialog<KoreanToggleKey>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text('한/영 버튼이 보낼 키'),
+        children: [
+          for (final key in KoreanToggleKey.values)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, key),
+              child: Row(children: [
+                Icon(key == current
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked),
+                SizedBox(width: 8),
+                Text(koreanToggleKeyLabel(key)),
+              ]),
+            ),
+        ],
+      ),
+    );
+    if (picked != null && picked != current) {
+      await bind.mainSetLocalOption(
+          key: kOptionKoreanToggleKey, value: picked.name);
+      setState(() {});
+    }
   }
 
   _updateRect() {
@@ -993,6 +1056,9 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
       wrap(isMac ? ' Cmd ' : ' Win ', () {
         setState(() => inputModel.command = !inputModel.command);
       }, active: inputModel.command),
+      // Tap: switch Korean/English on the remote side. Long press: choose
+      // which key that sends (Hangul, F18, Right Alt, Shift/Ctrl+Space).
+      wrap('한/영', _sendKoreanToggle, onLongPress: _pickKoreanToggleKey),
     ];
     final keys = <Widget>[
       wrap(
