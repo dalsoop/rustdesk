@@ -1,0 +1,35 @@
+name: flutter unit tests (soft keyboard / Korean)
+
+# Pure Dart tests for the mobile soft-keyboard path. The APK workflow only
+# builds, so these run separately and quickly.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "flutter/lib/models/soft_keyboard_input_utils.dart"
+      - "flutter/lib/models/hangul_dubeolsik.dart"
+      - "flutter/lib/models/korean_toggle_key.dart"
+      - "flutter/test/**"
+      - ".github/workflows/flutter-unit-test.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: "stable"
+          flutter-version: "3.24.5"
+
+      - name: Run tests
+        working-directory: flutter
+        run: |
+          flutter pub get
+          flutter test \
+            test/soft_keyboard_input_utils_test.dart \
+            test/hangul_dubeolsik_test.dart \
+            test/korean_toggle_key_test.dart
