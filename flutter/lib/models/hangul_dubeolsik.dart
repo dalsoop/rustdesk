@@ -5,8 +5,13 @@
 // codes, so a Hangul syllable sent as text never arrives. Sending the
 // Dubeolsik keys instead (안 -> d k s) lets the host's own input method
 // (fcitx5, ibus) compose the syllables, the same way a physical keyboard does.
-// The host's input method must be in Korean mode; the "한/영" key bar button
-// switches it.
+// The host's input method must be in Korean mode for the keys to compose, and
+// in English mode for Latin letters. A toggle key cannot set a known state, so
+// the client sends F19 before Korean and F24 before Latin letters; a host maps
+// them to Hangul_Start and Hangul_End and binds those to its input method's
+// activate and deactivate keys (fcitx5 ActivateKeys / DeactivateKeys). On a
+// host without that mapping both keys do nothing and the "한/영" key bar
+// button switches the mode by hand.
 
 /// How the mobile soft keyboard sends Korean text.
 enum KoreanInputMode { auto, unicode, dubeolsik }
@@ -30,6 +35,23 @@ String koreanInputModeLabel(KoreanInputMode mode) {
     case KoreanInputMode.dubeolsik:
       return '두벌식 키 (원격 입력기가 조합)';
   }
+}
+
+/// USB HID usage (keyboard page 0x07) of F19, sent before Korean keys.
+const int kUsbHidHangulStart = 0x6E;
+
+/// USB HID usage (keyboard page 0x07) of F24, sent before Latin letters.
+const int kUsbHidHangulEnd = 0x73;
+
+/// Input method state the host needs for a run of Dubeolsik keys.
+enum RemoteImeMode { korean, latin }
+
+/// The mode the host must be in to type [insert], or null when either mode
+/// types it the same (digits, punctuation, spaces, nothing at all).
+RemoteImeMode? remoteImeModeFor(String insert) {
+  if (containsHangul(insert)) return RemoteImeMode.korean;
+  if (insert.contains(RegExp('[A-Za-z]'))) return RemoteImeMode.latin;
+  return null;
 }
 
 /// Whether to send Dubeolsik keys to a peer of [peerPlatform] ('Linux', ...).

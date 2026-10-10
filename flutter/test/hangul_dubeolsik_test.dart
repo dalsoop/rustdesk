@@ -93,4 +93,29 @@ void main() {
       expect(koreanInputModeFromOption(''), KoreanInputMode.auto);
     });
   });
+
+  group('remoteImeModeFor', () {
+    test('Korean needs Korean mode, Latin letters need English mode', () {
+      expect(remoteImeModeFor('안'), RemoteImeMode.korean);
+      expect(remoteImeModeFor('ㅇ'), RemoteImeMode.korean);
+      expect(remoteImeModeFor('a'), RemoteImeMode.latin);
+      expect(remoteImeModeFor('Hello'), RemoteImeMode.latin);
+    });
+
+    test('mixed text with Hangul needs Korean mode', () {
+      expect(remoteImeModeFor('a안'), RemoteImeMode.korean);
+    });
+
+    test('digits, punctuation and nothing work in either mode', () {
+      expect(remoteImeModeFor(''), isNull);
+      expect(remoteImeModeFor('1'), isNull);
+      expect(remoteImeModeFor(' '), isNull);
+      expect(remoteImeModeFor('.,!?'), isNull);
+    });
+
+    test('F19 and F24 are the USB HID usages the host maps', () {
+      expect(kUsbHidHangulStart, 0x6E);
+      expect(kUsbHidHangulEnd, 0x73);
+    });
+  });
 }

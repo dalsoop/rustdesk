@@ -61,6 +61,11 @@ class RemotePage extends StatefulWidget {
   State<RemotePage> createState() => _RemotePageState(id);
 }
 
+/// Input method state the open session last set on the host; null when unknown
+/// (not set yet, or the "한/영" button toggled it). One remote page is open at a
+/// time on mobile.
+RemoteImeMode? _remoteImeMode;
+
 class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Timer? _timer;
   bool _showBar = !isWebDesktop;
@@ -96,6 +101,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _remoteImeMode = null;
     gFFI.ffiModel.updateEventListener(sessionId, widget.id);
     gFFI.start(
       widget.id,
@@ -338,17 +344,19 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final effectiveOld = clipboardAdjustedOldValue(_value, newValue);
     _value = newValue;
     final edit = computeSoftKeyboardEditDetailed(effectiveOld, newValue);
-    if ((containsHangul(edit.deleted) || containsHangul(edit.insert)) &&
-        useDubeolsikKeys(
-            koreanInputModeFromOption(
-                bind.mainGetLocalOption(key: kOptionKoreanInputMode)),
-            gFFI.ffiModel.pi.platform)) {
+    final dubeolsik = useDubeolsikKeys(
+        koreanInputModeFromOption(
+            bind.mainGetLocalOption(key: kOptionKoreanInputMode)),
+        gFFI.ffiModel.pi.platform);
+    if (dubeolsik &&
+        (containsHangul(edit.deleted) || containsHangul(edit.insert))) {
       // The host cannot type Hangul text (e.g. Linux on Wayland): send the
       // Dubeolsik keys and let the host's input method compose them.
       final keyEdit = dubeolsikKeyEdit(edit.deleted, edit.insert);
       for (var k = 0; k < keyEdit.backspaces; k++) {
         inputModel.inputKey('VK_BACK');
       }
+      _setRemoteImeMode(remoteImeModeFor(edit.insert));
       for (final key in keyEdit.keys.split('')) {
         inputChar(key);
       }
@@ -359,6 +367,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
     if (edit.insert.isEmpty) {
       return;
+    }
+    if (dubeolsik) {
+      _setRemoteImeMode(remoteImeModeFor(edit.insert));
     }
     if (isAutoInsertedBracketPair(effectiveOld, edit.backspaces, edit.insert)) {
       // can not only input insert[0], because when input ], [ are also auto insert, which cause ] never be input
@@ -371,6 +382,18 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     } else {
       inputChar(edit.insert);
     }
+  }
+
+  /// Sends F19 (Korean) or F24 (English) when the host must change mode for
+  /// the next keys. See hangul_dubeolsik.dart for the host side.
+  void _setRemoteImeMode(RemoteImeMode? mode) {
+    if (mode == null || mode == _remoteImeMode) return;
+    final usbHid = mode == RemoteImeMode.korean
+        ? kUsbHidHangulStart
+        : kUsbHidHangulEnd;
+    inputModel.newKeyboardMode('', usbHid, true, false);
+    inputModel.newKeyboardMode('', usbHid, false, false);
+    _remoteImeMode = mode;
   }
 
   // handle mobile virtual keyboard
@@ -974,6 +997,7 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
   /// Korean/English. Modifier toggles the user left on are kept as they were.
   void _sendKoreanToggle() {
     final input = gFFI.inputModel;
+    _remoteImeMode = null;
     switch (_koreanToggleKey) {
       case KoreanToggleKey.hangul:
         input.inputKey('VK_HANGUL');
