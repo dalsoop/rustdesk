@@ -97,6 +97,17 @@ mod pa_impl {
     pub async fn run(sp: EmptyExtraFieldService) -> ResultType<()> {
         hbb_common::sleep(0.1).await; // one moment to wait for _pa ipc
         RESTARTING.store(false, Ordering::SeqCst);
+        // The `_pa` ipc is served by the cm, which is not started at a login
+        // screen, so connecting there fails and logs an error every second.
+        // Wait here instead; audio starts once a user logs in. Poll slowly,
+        // `is_prelogin` spawns a process on every call.
+        #[cfg(target_os = "linux")]
+        while crate::platform::is_prelogin() {
+            if !sp.ok() {
+                return Ok(());
+            }
+            hbb_common::sleep(3.).await;
+        }
         #[cfg(target_os = "linux")]
         let mut stream = crate::ipc::connect(1000, "_pa").await?;
         let mut encoder = AudioEncoder::new(Encoder::new(
@@ -124,7 +135,11 @@ mod pa_impl {
             })?;
 
             #[cfg(target_os = "linux")]
-            if let Ok(data) = stream.next_raw().await {
+            {
+                // The `_pa` peer closing surfaces as `Err` here. Dropping it left the loop polling
+                // a dead socket -- one 0-byte read per poll, ready at once and never `Pending` --
+                // which burned a full core for the rest of the process lifetime.
+                let data = stream.next_raw().await?;
                 if data.len() == 0 {
                     send_f32(&zero_audio_frame, &mut encoder, &sp);
                     continue;
@@ -387,6 +402,15 @@ mod cpal_impl {
         if !audio_input.is_empty() {
             return get_audio_input(&audio_input);
         }
+        // The pinned CPAL uses event-driven WASAPI loopback here. Windows versions
+        // before Windows 10 1703 do not signal capture events, so system audio does
+        // not work on Win7. #16095 kept the same CPAL revision and loopback path;
+        // this limitation predates that PR.
+        // Ordinary microphone input is supported on Win7 and uses the branch above.
+        // #16095 added its callback-to-encoder wake dependency; see CapturePcmSender::wake
+        // for the new scheduling risk, whose audible impact on Win7 is unmeasured.
+        // https://learn.microsoft.com/en-us/windows/win32/coreaudio/loopback-recording
+        // https://learn.microsoft.com/en-us/windows/win32/coreaudio/capturesharedeventdriven
         let device = HOST
             .default_output_device()
             .with_context(|| "Failed to get default output device for loopback")?;

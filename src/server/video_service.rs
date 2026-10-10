@@ -52,6 +52,8 @@ use scrap::{
     CodecFormat, Display, EncodeInput, TraitCapturer, TraitPixelBuffer,
 };
 #[cfg(windows)]
+use std::io::ErrorKind::ConnectionReset;
+#[cfg(windows)]
 use std::sync::Once;
 use std::{
     collections::HashSet,
@@ -61,6 +63,59 @@ use std::{
 };
 
 pub const OPTION_REFRESH: &'static str = "refresh";
+
+#[cfg(windows)]
+const DXGI_RECOVERY_LIMIT: usize = 3;
+#[cfg(windows)]
+const DXGI_RECOVERY_WINDOW: Duration = Duration::from_secs(10);
+#[cfg(windows)]
+const DXGI_RECOVERY_FRAME_GRACE: Duration = Duration::from_secs(2);
+
+#[cfg(windows)]
+struct DxgiRecoveryState {
+    attempts: usize,
+    window_started: Option<Instant>,
+    restart_pending: bool,
+    fallback_pending: bool,
+}
+
+#[cfg(windows)]
+impl DxgiRecoveryState {
+    fn new() -> Self {
+        Self {
+            attempts: 0,
+            window_started: None,
+            restart_pending: false,
+            fallback_pending: false,
+        }
+    }
+
+    fn next_attempt(&mut self) -> Option<usize> {
+        if self
+            .window_started
+            .map(|started| started.elapsed() > DXGI_RECOVERY_WINDOW)
+            .unwrap_or(true)
+        {
+            self.attempts = 0;
+            self.window_started = Some(Instant::now());
+        }
+        if self.attempts >= DXGI_RECOVERY_LIMIT {
+            self.fallback_pending = true;
+            return None;
+        }
+        self.attempts += 1;
+        self.restart_pending = true;
+        Some(self.attempts)
+    }
+
+    fn take_restart_pending(&mut self) -> bool {
+        std::mem::take(&mut self.restart_pending)
+    }
+
+    fn take_fallback_pending(&mut self) -> bool {
+        std::mem::take(&mut self.fallback_pending)
+    }
+}
 
 type FrameFetchedNotifierSender = UnboundedSender<(i32, Option<Instant>)>;
 type FrameFetchedNotifierReceiver = Arc<TokioMutex<UnboundedReceiver<(i32, Option<Instant>)>>>;
@@ -220,6 +275,8 @@ pub struct VideoService {
     sp: GenericService,
     idx: usize,
     source: VideoSource,
+    #[cfg(windows)]
+    dxgi_recovery_state: Arc<Mutex<DxgiRecoveryState>>,
 }
 
 impl Deref for VideoService {
@@ -253,6 +310,8 @@ pub fn new(source: VideoSource, idx: usize) -> GenericService {
         sp: GenericService::new(get_service_name(source, idx), true),
         idx,
         source,
+        #[cfg(windows)]
+        dxgi_recovery_state: Arc::new(Mutex::new(DxgiRecoveryState::new())),
     };
     GenericService::run(&vs, run);
     vs.sp
@@ -565,8 +624,24 @@ fn run(vs: VideoService) -> ResultType<()> {
     let last_portable_service_running = false;
 
     let display_idx = vs.idx;
+    #[cfg(windows)]
+    let dxgi_recovery_state = vs.dxgi_recovery_state.clone();
     let sp = vs.sp;
     let mut c = get_capturer(vs.source, display_idx, last_portable_service_running)?;
+    #[cfg(windows)]
+    // ACCESS_LOST marks the next successful capturer creation as a recovery. This timestamp is
+    // consumed once and temporarily holds off the normal WouldBlock-to-GDI fallback, giving the
+    // replacement DXGI capturer time to produce its first frame. Normal startup is unaffected.
+    let dxgi_recovery_started = dxgi_recovery_state
+        .lock()
+        .unwrap()
+        .take_restart_pending()
+        .then(Instant::now);
+    #[cfg(windows)]
+    if dxgi_recovery_state.lock().unwrap().take_fallback_pending() {
+        c.set_gdi();
+        log::info!("dxgi recovery exhausted, fall back to gdi");
+    }
     #[cfg(windows)]
     if !scrap::codec::enable_directx_capture() && !c.is_gdi() {
         log::info!("disable dxgi with option, fall back to gdi");
@@ -655,12 +730,6 @@ fn run(vs: VideoService) -> ResultType<()> {
     let capture_width = c.width;
     let capture_height = c.height;
     let (mut second_instant, mut send_counter) = (Instant::now(), 0);
-    // Diagnostics only.  `send_counter` counts capture rounds, which is not the
-    // number of frames that reached a connection: the encoder's own rate control
-    // drops frames when the bitrate cannot carry them.  `wait_max_ms` is how long
-    // a round waited for the previous frame to be picked up, so a blocked write
-    // shows up here as capture stalling rather than as a slow network.
-    let (mut sent_counter, mut wait_max_ms) = (0usize, 0u32);
 
     while sp.ok() {
         #[cfg(windows)]
@@ -671,8 +740,6 @@ fn run(vs: VideoService) -> ResultType<()> {
             &mut spf,
             client_record,
             &mut send_counter,
-            &mut sent_counter,
-            &mut wait_max_ms,
             &mut second_instant,
             &sp.name(),
         )?;
@@ -793,9 +860,6 @@ fn run(vs: VideoService) -> ResultType<()> {
                         capture_width,
                         capture_height,
                     )?;
-                    if !send_conn_ids.is_empty() {
-                        sent_counter += 1;
-                    }
                     frame_controller.set_send(now, send_conn_ids);
                     send_counter += 1;
                 }
@@ -815,13 +879,18 @@ fn run(vs: VideoService) -> ResultType<()> {
         match res {
             Err(ref e) if e.kind() == WouldBlock => {
                 #[cfg(windows)]
-                if try_gdi > 0 && !c.is_gdi() {
-                    if try_gdi > 3 {
-                        c.set_gdi();
-                        try_gdi = 0;
-                        log::info!("No image, fall back to gdi");
+                if dxgi_recovery_started
+                    .map(|started| started.elapsed() >= DXGI_RECOVERY_FRAME_GRACE)
+                    .unwrap_or(true)
+                {
+                    if try_gdi > 0 && !c.is_gdi() {
+                        if try_gdi > 3 {
+                            c.set_gdi();
+                            try_gdi = 0;
+                            log::info!("No image, fall back to gdi");
+                        }
+                        try_gdi += 1;
                     }
-                    try_gdi += 1;
                 }
                 #[cfg(target_os = "linux")]
                 {
@@ -855,15 +924,19 @@ fn run(vs: VideoService) -> ResultType<()> {
                             capture_width,
                             capture_height,
                         )?;
-                        if !send_conn_ids.is_empty() {
-                            sent_counter += 1;
-                        }
                         frame_controller.set_send(now, send_conn_ids);
                         send_counter += 1;
                     }
                 }
             }
             Err(err) => {
+                #[cfg(windows)]
+                // The display-change check can restart capture before error handling below.
+                let recovery_attempt = if !c.is_gdi() && err.kind() == ConnectionReset {
+                    dxgi_recovery_state.lock().unwrap().next_attempt()
+                } else {
+                    None
+                };
                 // This check may be redundant, but it is better to be safe.
                 // The previous check in `sp.is_option_true(OPTION_REFRESH)` block may be enough.
                 if vs.source.is_monitor() {
@@ -872,6 +945,19 @@ fn run(vs: VideoService) -> ResultType<()> {
 
                 #[cfg(windows)]
                 if !c.is_gdi() {
+                    if err.kind() == ConnectionReset {
+                        if let Some(attempt) = recovery_attempt {
+                            log::debug!(
+                                "dxgi access lost, restart capture: attempt {attempt}, error: {err:?}"
+                            );
+                            bail!("SWITCH");
+                        }
+                        log::warn!(
+                            "dxgi access lost after {DXGI_RECOVERY_LIMIT} restarts in {} seconds, fall back to gdi: {err:?}",
+                            DXGI_RECOVERY_WINDOW.as_secs()
+                        );
+                        dxgi_recovery_state.lock().unwrap().take_fallback_pending();
+                    }
                     c.set_gdi();
                     log::info!("dxgi error, fall back to gdi: {:?}", err);
                     continue;
@@ -899,7 +985,6 @@ fn run(vs: VideoService) -> ResultType<()> {
                 break;
             }
         }
-        wait_max_ms = wait_max_ms.max(wait_begin.elapsed().as_millis() as u32);
         DISPLAY_CONN_IDS.lock().unwrap().remove(&display_idx);
 
         let elapsed = now.elapsed();
@@ -1330,22 +1415,12 @@ pub fn make_display_changed_msg(
     Some(msg_out)
 }
 
-/// Per-second pipeline diagnostics, off unless `RUSTDESK_QOS_VERBOSE` is set.
-/// The default log level is `debug`, so an unconditional line here would land in
-/// every user's log file once a second forever.  Nothing enables it implicitly.
-pub(crate) fn qos_diag_verbose() -> bool {
-    static VERBOSE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *VERBOSE.get_or_init(|| std::env::var("RUSTDESK_QOS_VERBOSE").is_ok())
-}
-
 fn check_qos(
     encoder: &mut Encoder,
     ratio: &mut f32,
     spf: &mut Duration,
     client_record: bool,
     send_counter: &mut usize,
-    sent_counter: &mut usize,
-    wait_max_ms: &mut u32,
     second_instant: &mut Instant,
     name: &str,
 ) -> ResultType<()> {
@@ -1371,21 +1446,7 @@ fn check_qos(
     if second_instant.elapsed() > Duration::from_secs(1) {
         *second_instant = Instant::now();
         video_qos.update_display_data(&name, *send_counter);
-        // Diagnostics only, joined with `qos_trace` on `t`: the controller's target
-        // is not the rate the encoder produced, and neither is the rate the send
-        // path accepted.
-        if qos_diag_verbose() {
-            log::debug!(
-                "qos_video t={} display={name} captured={} sent={} wait_max={}",
-                hbb_common::get_time(),
-                *send_counter,
-                *sent_counter,
-                *wait_max_ms
-            );
-        }
         *send_counter = 0;
-        *sent_counter = 0;
-        *wait_max_ms = 0;
     }
     drop(video_qos);
     Ok(())
