@@ -5,6 +5,8 @@
 // already-correct iOS path purely to deduplicate would add regression risk for no behavioral
 // gain. If the diff ever has to change for both platforms, unify then.
 
+import 'package:flutter/widgets.dart' show StringCharacters;
+
 /// Computes the edit to push to the remote host given the previous (`oldValue`) and current
 /// (`newValue`) soft-keyboard text-field contents, both seeded with the `'1' * N` sentinel.
 ///
@@ -31,18 +33,25 @@
   final subNewValue = newValue.substring(j + 1);
   final subOldValue = oldValue.substring(j + 1);
 
-  // Longest common prefix of the two windows.
+  // Longest common prefix of the two windows, in grapheme clusters: an emoji is
+  // several UTF-16 code units but one Backspace on the host, and a prefix that
+  // ends inside a surrogate pair would send half a character.
+  final oldChars = subOldValue.characters.toList(growable: false);
+  final newChars = subNewValue.characters.toList(growable: false);
   var common = 0;
   for (;
-      common < subOldValue.length &&
-          common < subNewValue.length &&
-          subNewValue[common] == subOldValue[common];
+      common < oldChars.length &&
+          common < newChars.length &&
+          newChars[common] == oldChars[common];
       ++common) {}
 
-  final insert =
-      subNewValue.length > common ? subNewValue.substring(common) : '';
-  final deleted = subOldValue.substring(common);
-  return (backspaces: deleted.length, insert: insert, deleted: deleted);
+  final insert = newChars.skip(common).join();
+  final deleted = oldChars.skip(common).join();
+  return (
+    backspaces: oldChars.length - common,
+    insert: insert,
+    deleted: deleted
+  );
 }
 
 /// Reproduces the Android clipboard guard (remote_page.dart ~331-337): when the sentinel-prefixed

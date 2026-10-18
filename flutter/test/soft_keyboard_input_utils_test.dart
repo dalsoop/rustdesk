@@ -43,6 +43,14 @@ void main() {
       expect(computeSoftKeyboardEdit('1', '1ab'),
           (backspaces: 0, insert: 'ab'));
     });
+    test('deleting an emoji sends one backspace', () {
+      expect(computeSoftKeyboardEdit('1a😀', '1a'),
+          (backspaces: 1, insert: ''));
+    });
+    test('replacing an emoji sends the whole new emoji', () {
+      expect(computeSoftKeyboardEdit('1😀', '1😁'),
+          (backspaces: 1, insert: '😁'));
+    });
   });
 
   group('clipboardAdjustedOldValue', () {
