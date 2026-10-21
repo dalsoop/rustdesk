@@ -2685,11 +2685,23 @@ class _KeyboardMenu extends StatelessWidget {
     final children = <Widget>[Divider()];
     children.addAll(supportedInputSourceList.map((e) {
       final d = e as List<dynamic>;
-      final label = isMacOS
-          ? (_kMacInputSourceLabels[d[0] as String] ?? d[1] as String)
-          : d[1] as String;
+      final subtitle = isMacOS ? _kMacInputSourceSubtitles[d[0] as String] : null;
       return RdoMenuButton<String>(
-        child: Text(translate(label)),
+        child: subtitle == null
+            ? Text(translate(d[1] as String))
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(translate(d[1] as String)),
+                  SizedBox(
+                    width: 360,
+                    child: Text(translate(subtitle),
+                        style: const TextStyle(
+                            fontSize: 11, color: Colors.grey)),
+                  ),
+                ],
+              ),
         value: d[0] as String,
         groupValue: inputSource,
         onChanged: enabled
@@ -3833,17 +3845,17 @@ class _MinimizedMonitorSwitchButton extends StatelessWidget {
   }
 }
 
-// macOS labels for the "Input source 1/2" choices (the stored values are
-// unchanged); other platforms keep input_source_1_tip / input_source_2_tip.
-const _kMacInputSourceLabels = {
+// macOS subtitles under the "Input source 1/2" titles; other platforms show
+// the titles only.
+const _kMacInputSourceSubtitles = {
   'Input source 1':
-      'Send all keys, including Mac shortcuts like ⌘Tab and ⌘Space (needs Input Monitoring)',
+      'Send all keys · Mac shortcuts like ⌘Tab and ⌘Space go to the remote side too · Needs Input Monitoring',
   'Input source 2':
-      'Send keys typed in the RustDesk window only (no permission needed; Mac shortcuts stay on this Mac)',
+      'Send keys typed in the RustDesk window only · No permission needed · Mac shortcuts stay on this Mac',
 };
 const kMacInputSourceHangulTip =
     'The Korean/English key reaches the remote side either way.';
 const kMacInputMonitoringAllowedTip = 'Input Monitoring: allowed';
 const kMacInputMonitoringMissingTip =
-    'Input Monitoring: not allowed, so only keys typed in the RustDesk window are sent. Allow it, then restart RustDesk.';
+    'Input Monitoring: not allowed, so Input source 2 (RustDesk window keys only) is in use. Allow it, then restart RustDesk.';
 const kMacOpenInputMonitoringSettings = 'Open Input Monitoring settings';
