@@ -909,3 +909,49 @@ extern "C" bool MacSetPrivacyMode(bool on) {
         return TurnOffPrivacyModeInternal();
     }
 }
+
+#include <Carbon/Carbon.h>
+
+static bool IsKoreanInputSource(TISInputSourceRef source) {
+    CFStringRef sourceId = (CFStringRef)TISGetInputSourceProperty(source, kTISPropertyInputSourceID);
+    return sourceId && CFStringHasPrefix(sourceId, CFSTR("com.apple.inputmethod.Korean"));
+}
+
+static TISInputSourceRef CopyEnabledKoreanInputSource() {
+    CFArrayRef sources = TISCreateInputSourceList(NULL, false);
+    if (!sources) {
+        return NULL;
+    }
+    TISInputSourceRef found = NULL;
+    for (CFIndex i = 0; i < CFArrayGetCount(sources); i++) {
+        TISInputSourceRef source = (TISInputSourceRef)CFArrayGetValueAtIndex(sources, i);
+        CFBooleanRef selectable = (CFBooleanRef)TISGetInputSourceProperty(
+            source, kTISPropertyInputSourceIsSelectCapable);
+        if (selectable && CFBooleanGetValue(selectable) && IsKoreanInputSource(source)) {
+            found = (TISInputSourceRef)CFRetain(source);
+            break;
+        }
+    }
+    CFRelease(sources);
+    return found;
+}
+
+// macOS drops input-source hotkeys that arrive as synthetic events, so a remote
+// Korean/English key has to switch the input source through TIS. Returns false
+// when there is nothing to switch to (no Korean input source enabled).
+extern "C" bool MacToggleKoreanInputSource() {
+    TISInputSourceRef current = TISCopyCurrentKeyboardInputSource();
+    if (!current) {
+        return false;
+    }
+    bool korean = IsKoreanInputSource(current);
+    CFRelease(current);
+    TISInputSourceRef target = korean ? TISCopyCurrentASCIICapableKeyboardLayoutInputSource()
+                                      : CopyEnabledKoreanInputSource();
+    if (!target) {
+        return false;
+    }
+    OSStatus status = TISSelectInputSource(target);
+    CFRelease(target);
+    return status == noErr;
+}

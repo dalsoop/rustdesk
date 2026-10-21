@@ -1605,6 +1605,7 @@ pub fn handle_key(evt: &KeyEvent) {
 #[cfg(target_os = "macos")]
 #[inline]
 fn reset_input() {
+    crate::platform::macos_input_source::reset_toggle_keys();
     unsafe {
         let _lock = VIRTUAL_INPUT_MTX.lock();
         VIRTUAL_INPUT_STATE = VirtualInputState::new();
@@ -2478,6 +2479,11 @@ fn is_legacy_mode(evt: &KeyEvent) -> bool {
 
 pub fn handle_key_(evt: &KeyEvent) {
     if EXITING.load(Ordering::SeqCst) {
+        return;
+    }
+
+    #[cfg(target_os = "macos")]
+    if crate::platform::macos_input_source::handle_toggle_key(evt) {
         return;
     }
 
