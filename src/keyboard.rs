@@ -975,8 +975,12 @@ pub fn event_to_key_events(
     key_event.mode = keyboard_mode.into();
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if let Some(evt) = crate::hangul_key::to_peer_hangul_key(&peer, event, &key_event) {
-        return vec![evt];
+    if let Some(events) =
+        crate::hangul_key::to_peer_hangul_key(&peer, event, &key_event, &|down| {
+            held_modifier_key_events(&peer, event, keyboard_mode, &key_event, down)
+        })
+    {
+        return events;
     }
 
     let mut key_events = match keyboard_mode {
@@ -1007,6 +1011,55 @@ pub fn event_to_key_events(
         }
     }
     key_events
+}
+
+/// The modifier keys held now (other than `event`'s key), as key events for
+/// `peer` in `keyboard_mode`, pressed (`down`) or released. The local key state
+/// is left alone: the keys are still down here.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn held_modifier_key_events(
+    peer: &str,
+    event: &Event,
+    keyboard_mode: KeyboardMode,
+    key_event: &KeyEvent,
+    down: bool,
+) -> Vec<KeyEvent> {
+    let current = match event.event_type {
+        EventType::KeyPress(key) | EventType::KeyRelease(key) => Some(key),
+        _ => None,
+    };
+    let held: Vec<Event> = TO_RELEASE
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(key, _)| {
+            Some(**key) != current
+                && matches!(
+                    key,
+                    Key::ControlLeft
+                        | Key::ControlRight
+                        | Key::ShiftLeft
+                        | Key::ShiftRight
+                        | Key::Alt
+                        | Key::AltGr
+                        | Key::MetaLeft
+                        | Key::MetaRight
+                )
+        })
+        .map(|(_, e)| e.clone())
+        .collect();
+    let mut events = Vec::new();
+    for mut e in held {
+        if let (false, EventType::KeyPress(key)) = (down, e.event_type) {
+            e.event_type = EventType::KeyRelease(key);
+        }
+        events.extend(match keyboard_mode {
+            KeyboardMode::Map => map_keyboard_mode(peer, &e, key_event.clone()),
+            KeyboardMode::Translate => translate_keyboard_mode(peer, &e, key_event.clone()),
+            _ => legacy_keyboard_mode(&e, key_event.clone()),
+        });
+    }
+    events
 }
 
 pub fn send_key_event(key_event: &KeyEvent) {

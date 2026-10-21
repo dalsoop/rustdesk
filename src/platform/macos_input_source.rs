@@ -15,6 +15,12 @@ const INPUT_SOURCE_HOTKEYS: [i32; 2] = [60, 61];
 
 extern "C" {
     fn MacToggleKoreanInputSource() -> bool;
+    fn MacReadSymbolicHotKey(
+        hot_key: i32,
+        enabled: *mut i32,
+        params: *mut i64,
+        max_params: i32,
+    ) -> i32;
     fn CGSIsSymbolicHotKeyEnabled(hot_key: i32) -> bool;
     fn CGSSetSymbolicHotKeyEnabled(hot_key: i32, enabled: bool) -> i32;
 }
@@ -111,6 +117,10 @@ pub fn reset_toggle_keys() {
 /// hotkeys that were on are turned off, and a marker file remembers them so a
 /// later launch can turn them back on if RustDesk died while they were off.
 pub fn set_remote_keyboard_active(owner: u128, active: bool, reason: &str) {
+    if active {
+        // Read before turning the hotkeys off; the user may have changed them.
+        load_local_hangul_chords();
+    }
     let mut pause = HOTKEY_PAUSE.lock().unwrap();
     let HotkeyPause { owners, suspended } = &mut *pause;
     match note_owner(owners, owner, active) {
@@ -142,6 +152,37 @@ pub fn restore_hotkeys_left_suspended() {
         "Input-source hotkeys {:?} restored (left off by a previous run)",
         parse_marker(&text)
     );
+}
+
+/// Reads this Mac's input-source shortcuts (60, 61) from
+/// com.apple.symbolichotkeys; they and LANG1 become the local 한/영 keys.
+pub fn load_local_hangul_chords() {
+    use crate::hangul_key::{chord_from_symbolic_hotkey, local_chords, set_local_chords};
+    let chords = local_chords(
+        INPUT_SOURCE_HOTKEYS
+            .iter()
+            .map(|id| chord_from_symbolic_hotkey(*id, read_symbolic_hotkey(*id))),
+    );
+    set_local_chords(chords);
+}
+
+fn read_symbolic_hotkey(hot_key: i32) -> crate::hangul_key::SymbolicHotkeyEntry {
+    const MAX: usize = 8;
+    let mut enabled = -1;
+    let mut params = [0i64; MAX];
+    let count =
+        unsafe { MacReadSymbolicHotKey(hot_key, &mut enabled, params.as_mut_ptr(), MAX as i32) };
+    // -3: no entry; -1: no parameters; -2: a parameter is not a number.
+    if count == -3 {
+        return None;
+    }
+    let enabled = match enabled {
+        1 => Some(true),
+        0 => Some(false),
+        _ => None,
+    };
+    let params = (count >= 0).then(|| params[..(count as usize).min(MAX)].to_vec());
+    Some((enabled, params))
 }
 
 struct HotkeyPause {

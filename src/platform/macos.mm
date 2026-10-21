@@ -955,3 +955,33 @@ extern "C" bool MacToggleKoreanInputSource() {
     CFRelease(target);
     return status == noErr;
 }
+
+// Reads AppleSymbolicHotKeys[hotKey] from com.apple.symbolichotkeys. Writes the
+// enabled flag (1, 0, or -1 when missing) and up to maxParams of
+// value.parameters, and returns how many parameters the entry has: -3 when the
+// entry is absent, -1 when it has no parameters, -2 when one is not a number.
+extern "C" int MacReadSymbolicHotKey(int hotKey, int *enabled, long long *params, int maxParams) {
+    @autoreleasepool {
+        *enabled = -1;
+        CFPreferencesAppSynchronize(CFSTR("com.apple.symbolichotkeys"));
+        NSDictionary *domain =
+            [[NSUserDefaults standardUserDefaults] persistentDomainForName:@"com.apple.symbolichotkeys"];
+        NSDictionary *all = domain[@"AppleSymbolicHotKeys"];
+        if (![all isKindOfClass:[NSDictionary class]]) return -3;
+        NSDictionary *entry = all[[NSString stringWithFormat:@"%d", hotKey]];
+        if (![entry isKindOfClass:[NSDictionary class]]) return -3;
+        id flag = entry[@"enabled"];
+        if ([flag isKindOfClass:[NSNumber class]]) *enabled = [flag boolValue] ? 1 : 0;
+        NSDictionary *value = entry[@"value"];
+        if (![value isKindOfClass:[NSDictionary class]]) return -1;
+        NSArray *parameters = value[@"parameters"];
+        if (![parameters isKindOfClass:[NSArray class]]) return -1;
+        int n = 0;
+        for (id p in parameters) {
+            if (![p isKindOfClass:[NSNumber class]]) return -2;
+            if (n < maxParams) params[n] = [p longLongValue];
+            n++;
+        }
+        return n;
+    }
+}
