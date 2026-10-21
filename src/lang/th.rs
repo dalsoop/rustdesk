@@ -781,6 +781,12 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Relay fallback delay in seconds", "เวลารอก่อนเปลี่ยนไปใช้รีเลย์ (วินาที)"),
         ("relay-fallback-delay-tip", "การเชื่อมต่อผ่านรีเลย์ที่สร้างไว้แล้วจะรอการเชื่อมต่อ WebRTC โดยตรงนานเท่าใดก่อนที่จะถูกใช้แทน เพิ่มค่าเพื่อให้การเชื่อมต่อโดยตรงที่ช้ามีเวลามากขึ้น ลดค่าเพื่อเปลี่ยนไปใช้รีเลย์เร็วขึ้นในเครือข่ายที่ไม่สามารถเชื่อมต่อโดยตรงได้ เว้นว่างไว้เพื่อใช้ค่าเริ่มต้น 2.5 วินาที"),
         ("To start a voice call, enable \"Audio capture\" on the \"Screen share\" page.", ""),
-        ("Send my Korean/English key as the remote computer's Korean/English key", "")
+        ("Send my Korean/English key as the remote computer's Korean/English key", ""),
+        ("Send all keys, including Mac shortcuts like ⌘Tab and ⌘Space (needs Input Monitoring)", ""),
+        ("Send keys typed in the RustDesk window only (no permission needed; Mac shortcuts stay on this Mac)", ""),
+        ("The Korean/English key reaches the remote side either way.", ""),
+        ("Input Monitoring: allowed", ""),
+        ("Input Monitoring: not allowed, so only keys typed in the RustDesk window are sent. Allow it, then restart RustDesk.", ""),
+        ("Open Input Monitoring settings", "")
     ].iter().cloned().collect();
 }

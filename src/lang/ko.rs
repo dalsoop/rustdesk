@@ -781,6 +781,12 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Relay fallback delay in seconds", "릴레이 대체 작동 지연 시간 (초)"),
         ("relay-fallback-delay-tip", "이미 연결된 중계 연결이 직접 WebRTC 연결을 얼마나 기다린 후 대신 사용되는지입니다. 값을 늘리면 느린 직접 연결에 더 많은 시간을 주고, 줄이면 직접 연결이 불가능한 네트워크에서 더 빨리 중계로 전환합니다. 비워 두면 기본값 2.5초가 사용됩니다."),
         ("To start a voice call, enable \"Audio capture\" on the \"Screen share\" page.", "음성 통화를 시작하려면 '화면 공유' 페이지에서 '오디오 캡처'를 사용함으로 하세요."),
-        ("Send my Korean/English key as the remote computer's Korean/English key", "한/영 키를 원격 컴퓨터의 한/영 키로 바꿔 보내기")
+        ("Send my Korean/English key as the remote computer's Korean/English key", "한/영 키를 원격 컴퓨터의 한/영 키로 바꿔 보내기"),
+        ("Send all keys, including Mac shortcuts like ⌘Tab and ⌘Space (needs Input Monitoring)", "시스템 전체 키 전달 (⌘Tab·⌘Space 같은 맥 단축키도 원격으로 보냄, 입력 모니터링 권한 필요)"),
+        ("Send keys typed in the RustDesk window only (no permission needed; Mac shortcuts stay on this Mac)", "RustDesk 창 키만 전달 (권한 필요 없음, 맥 단축키는 내 맥에서 처리)"),
+        ("The Korean/English key reaches the remote side either way.", "한/영 키는 두 방식 모두 원격으로 갑니다."),
+        ("Input Monitoring: allowed", "입력 모니터링 권한: 있음"),
+        ("Input Monitoring: not allowed, so only keys typed in the RustDesk window are sent. Allow it, then restart RustDesk.", "입력 모니터링 권한: 없음 — 그래서 'RustDesk 창 키만 전달'로 동작합니다. 권한을 준 뒤 RustDesk 를 다시 시작하세요."),
+        ("Open Input Monitoring settings", "입력 모니터링 설정 열기")
     ].iter().cloned().collect();
 }

@@ -12,6 +12,7 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:debounce_throttle/debounce_throttle.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:window_size/window_size.dart' as window_size;
@@ -2684,8 +2685,11 @@ class _KeyboardMenu extends StatelessWidget {
     final children = <Widget>[Divider()];
     children.addAll(supportedInputSourceList.map((e) {
       final d = e as List<dynamic>;
+      final label = isMacOS
+          ? (_kMacInputSourceLabels[d[0] as String] ?? d[1] as String)
+          : d[1] as String;
       return RdoMenuButton<String>(
-        child: Text(translate(d[1] as String)),
+        child: Text(translate(label)),
         value: d[0] as String,
         groupValue: inputSource,
         onChanged: enabled
@@ -2702,7 +2706,44 @@ class _KeyboardMenu extends StatelessWidget {
         ffi: ffi,
       );
     }));
+    if (isMacOS) children.add(_macInputSourceHelp());
     return Column(children: children);
+  }
+
+  /// What the two macOS input sources mean, and whether Input Monitoring (which
+  /// "Input source 1" needs; without it the app runs on "Input source 2") is
+  /// allowed. The stored option values stay "Input source 1/2".
+  Widget _macInputSourceHelp() {
+    final allowed = bind.mainIsCanInputMonitoring(prompt: false);
+    const style = TextStyle(fontSize: 12, color: Colors.grey);
+    return SizedBox(
+      width: 380,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(translate(kMacInputSourceHangulTip), style: style),
+            Text(
+                translate(allowed
+                    ? kMacInputMonitoringAllowedTip
+                    : kMacInputMonitoringMissingTip),
+                style: style),
+            if (!allowed)
+              MenuButton(
+                child: Text(translate(kMacOpenInputMonitoringSettings)),
+                ffi: ffi,
+                onPressed: () {
+                  // Puts RustDesk in the list, then shows that pane.
+                  bind.mainIsCanInputMonitoring(prompt: true);
+                  launchUrl(Uri.parse(
+                      'x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent'));
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   viewMode() {
@@ -3791,3 +3832,18 @@ class _MinimizedMonitorSwitchButton extends StatelessWidget {
     });
   }
 }
+
+// macOS labels for the "Input source 1/2" choices (the stored values are
+// unchanged); other platforms keep input_source_1_tip / input_source_2_tip.
+const _kMacInputSourceLabels = {
+  'Input source 1':
+      'Send all keys, including Mac shortcuts like ⌘Tab and ⌘Space (needs Input Monitoring)',
+  'Input source 2':
+      'Send keys typed in the RustDesk window only (no permission needed; Mac shortcuts stay on this Mac)',
+};
+const kMacInputSourceHangulTip =
+    'The Korean/English key reaches the remote side either way.';
+const kMacInputMonitoringAllowedTip = 'Input Monitoring: allowed';
+const kMacInputMonitoringMissingTip =
+    'Input Monitoring: not allowed, so only keys typed in the RustDesk window are sent. Allow it, then restart RustDesk.';
+const kMacOpenInputMonitoringSettings = 'Open Input Monitoring settings';
