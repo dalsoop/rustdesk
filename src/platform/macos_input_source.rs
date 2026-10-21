@@ -9,9 +9,15 @@ use base::message_proto::{key_event, ControlKey, KeyEvent, KeyboardMode};
 use std::sync::Mutex;
 
 static SWALLOWED_KEYS: Mutex<Vec<ToggleKey>> = Mutex::new(Vec::new());
+static SUSPENDED_HOTKEYS: Mutex<Vec<i32>> = Mutex::new(Vec::new());
+
+/// Symbolic hotkeys "Select the previous / next input source" (F18 for 한/영).
+const INPUT_SOURCE_HOTKEYS: [i32; 2] = [60, 61];
 
 extern "C" {
     fn MacToggleKoreanInputSource() -> bool;
+    fn CGSIsSymbolicHotKeyEnabled(hot_key: i32) -> bool;
+    fn CGSSetSymbolicHotKeyEnabled(hot_key: i32, enabled: bool) -> i32;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,6 +94,38 @@ pub fn handle_toggle_key(evt: &KeyEvent) -> bool {
 /// Forgets held toggle keys whose key-up will never come (peer disconnected).
 pub fn reset_toggle_keys() {
     SWALLOWED_KEYS.lock().unwrap().clear();
+}
+
+/// Controlling side: turns the input-source hotkeys off while a remote window
+/// holds the keyboard, and back on when it lets go.
+///
+/// The window server matches symbolic hotkeys before the session event tap that
+/// grabs keys for the remote side, so F18 (Caps Lock) would switch the local
+/// input source as well as the remote one. Only hotkeys that were on are turned
+/// off and only those are turned back on. Known limit: if RustDesk dies while
+/// it holds the keyboard they stay off until the next grab and release, or
+/// until the user logs out.
+pub fn suspend_input_source_hotkeys(suspend: bool) {
+    use base::config::keys::OPTION_ENABLE_PEER_HANGUL_KEY;
+    use hbb_common::config::LocalConfig;
+
+    let mut suspended = SUSPENDED_HOTKEYS.lock().unwrap();
+    if !suspend {
+        for hot_key in suspended.drain(..) {
+            unsafe { CGSSetSymbolicHotKeyEnabled(hot_key, true) };
+        }
+        return;
+    }
+    if !LocalConfig::get_bool_option(OPTION_ENABLE_PEER_HANGUL_KEY) {
+        return;
+    }
+    for hot_key in INPUT_SOURCE_HOTKEYS {
+        if unsafe { CGSIsSymbolicHotKeyEnabled(hot_key) }
+            && unsafe { CGSSetSymbolicHotKeyEnabled(hot_key, false) } == 0
+        {
+            suspended.push(hot_key);
+        }
+    }
 }
 
 #[cfg(test)]
