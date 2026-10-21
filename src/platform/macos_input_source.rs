@@ -9,7 +9,6 @@ use base::message_proto::{key_event, ControlKey, KeyEvent, KeyboardMode};
 use std::sync::Mutex;
 
 static SWALLOWED_KEYS: Mutex<Vec<ToggleKey>> = Mutex::new(Vec::new());
-static SUSPENDED_HOTKEYS: Mutex<Vec<i32>> = Mutex::new(Vec::new());
 
 /// Symbolic hotkeys "Select the previous / next input source" (F18 for 한/영).
 const INPUT_SOURCE_HOTKEYS: [i32; 2] = [60, 61];
@@ -88,6 +87,12 @@ pub fn handle_toggle_key(evt: &KeyEvent) -> bool {
         return false;
     }
     swallowed.push(key);
+    hbb_common::throttled_log!(
+        std::time::Duration::from_secs(1),
+        info,
+        "Remote 한/영 key {:?}: switched the input source",
+        key
+    );
     true
 }
 
@@ -96,26 +101,86 @@ pub fn reset_toggle_keys() {
     SWALLOWED_KEYS.lock().unwrap().clear();
 }
 
-/// Controlling side: turns the input-source hotkeys off while a remote window
-/// holds the keyboard, and back on when it lets go.
+/// Controlling side: the input-source hotkeys are off while any remote session
+/// window has the keyboard, and back on when none has.
 ///
-/// The window server matches symbolic hotkeys before the session event tap that
-/// grabs keys for the remote side, so F18 (Caps Lock) would switch the local
-/// input source as well as the remote one. Only hotkeys that were on are turned
-/// off and only those are turned back on. Known limit: if RustDesk dies while
-/// it holds the keyboard they stay off until the next grab and release, or
-/// until the user logs out.
-pub fn suspend_input_source_hotkeys(suspend: bool) {
+/// The window server matches symbolic hotkeys before an application or event
+/// tap sees the key, so F18 (Caps Lock) would switch the local input source
+/// instead of reaching the remote side. `owner` is the session window (or grab
+/// owner); several windows can report themselves active in any order. Only
+/// hotkeys that were on are turned off, and a marker file remembers them so a
+/// later launch can turn them back on if RustDesk died while they were off.
+pub fn set_remote_keyboard_active(owner: u128, active: bool, reason: &str) {
+    let mut pause = HOTKEY_PAUSE.lock().unwrap();
+    let HotkeyPause { owners, suspended } = &mut *pause;
+    match note_owner(owners, owner, active) {
+        Transition::Suspend => suspend_hotkeys(suspended, reason),
+        Transition::Restore => restore_hotkeys(suspended, reason),
+        Transition::Keep => {}
+    }
+}
+
+/// Turns back on the hotkeys a previous RustDesk process left off (it died
+/// while a remote window had the keyboard). No-op while this process has a
+/// remote window active.
+pub fn restore_hotkeys_left_suspended() {
+    let pause = HOTKEY_PAUSE.lock().unwrap();
+    if !pause.owners.is_empty() || !pause.suspended.is_empty() {
+        return;
+    }
+    let path = marker_path();
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return;
+    };
+    for hot_key in parse_marker(&text) {
+        unsafe { CGSSetSymbolicHotKeyEnabled(hot_key, true) };
+    }
+    if let Err(e) = std::fs::remove_file(&path) {
+        hbb_common::log::warn!("Failed to remove {}: {}", path.display(), e);
+    }
+    hbb_common::log::info!(
+        "Input-source hotkeys {:?} restored (left off by a previous run)",
+        parse_marker(&text)
+    );
+}
+
+struct HotkeyPause {
+    owners: Vec<u128>,
+    suspended: Vec<i32>,
+}
+
+static HOTKEY_PAUSE: Mutex<HotkeyPause> = Mutex::new(HotkeyPause {
+    owners: Vec::new(),
+    suspended: Vec::new(),
+});
+
+#[derive(Debug, PartialEq, Eq)]
+enum Transition {
+    Suspend,
+    Restore,
+    Keep,
+}
+
+fn note_owner(owners: &mut Vec<u128>, owner: u128, active: bool) -> Transition {
+    let was_empty = owners.is_empty();
+    if active {
+        if !owners.contains(&owner) {
+            owners.push(owner);
+        }
+    } else {
+        owners.retain(|o| *o != owner);
+    }
+    match (was_empty, owners.is_empty()) {
+        (true, false) => Transition::Suspend,
+        (false, true) => Transition::Restore,
+        _ => Transition::Keep,
+    }
+}
+
+fn suspend_hotkeys(suspended: &mut Vec<i32>, reason: &str) {
     use base::config::keys::OPTION_ENABLE_PEER_HANGUL_KEY;
     use hbb_common::config::LocalConfig;
 
-    let mut suspended = SUSPENDED_HOTKEYS.lock().unwrap();
-    if !suspend {
-        for hot_key in suspended.drain(..) {
-            unsafe { CGSSetSymbolicHotKeyEnabled(hot_key, true) };
-        }
-        return;
-    }
     if !LocalConfig::get_bool_option(OPTION_ENABLE_PEER_HANGUL_KEY) {
         return;
     }
@@ -126,6 +191,49 @@ pub fn suspend_input_source_hotkeys(suspend: bool) {
             suspended.push(hot_key);
         }
     }
+    if suspended.is_empty() {
+        return;
+    }
+    let path = marker_path();
+    if let Err(e) = std::fs::write(&path, format_marker(suspended)) {
+        hbb_common::log::warn!("Failed to write {}: {}", path.display(), e);
+    }
+    hbb_common::log::info!(
+        "Input-source hotkeys {:?} suspended ({})",
+        suspended,
+        reason
+    );
+}
+
+fn restore_hotkeys(suspended: &mut Vec<i32>, reason: &str) {
+    if suspended.is_empty() {
+        return;
+    }
+    for hot_key in suspended.iter() {
+        unsafe { CGSSetSymbolicHotKeyEnabled(*hot_key, true) };
+    }
+    hbb_common::log::info!("Input-source hotkeys {:?} restored ({})", suspended, reason);
+    suspended.clear();
+    let _ = std::fs::remove_file(marker_path());
+}
+
+fn marker_path() -> std::path::PathBuf {
+    hbb_common::config::Config::path("input-source-hotkeys-suspended")
+}
+
+fn format_marker(hot_keys: &[i32]) -> String {
+    hot_keys
+        .iter()
+        .map(|k| k.to_string())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn parse_marker(text: &str) -> Vec<i32> {
+    text.split(',')
+        .filter_map(|k| k.trim().parse::<i32>().ok())
+        .filter(|k| INPUT_SOURCE_HOTKEYS.contains(k))
+        .collect()
 }
 
 #[cfg(test)]
@@ -159,6 +267,26 @@ mod tests {
     }
 
     #[test]
+    fn hotkeys_stay_off_while_any_remote_window_is_active() {
+        let mut owners = Vec::new();
+        assert_eq!(note_owner(&mut owners, 1, true), Transition::Suspend);
+        // A second window becomes active before the first one reports leaving.
+        assert_eq!(note_owner(&mut owners, 2, true), Transition::Keep);
+        assert_eq!(note_owner(&mut owners, 1, false), Transition::Keep);
+        assert_eq!(note_owner(&mut owners, 1, false), Transition::Keep);
+        assert_eq!(note_owner(&mut owners, 2, true), Transition::Keep);
+        assert_eq!(note_owner(&mut owners, 2, false), Transition::Restore);
+        assert_eq!(note_owner(&mut owners, 2, false), Transition::Keep);
+    }
+
+    #[test]
+    fn marker_round_trips_only_input_source_hotkeys() {
+        assert_eq!(parse_marker(&format_marker(&[60, 61])), vec![60, 61]);
+        assert_eq!(parse_marker("60, 7,x,61\n"), vec![60, 61]);
+        assert!(parse_marker("").is_empty());
+    }
+
+    #[test]
     fn other_keys_are_simulated() {
         let cases = [
             // F17, F19 and kVK_JIS_Eisu (Lang2) keep their meaning.
@@ -171,7 +299,10 @@ mod tests {
                 KeyboardMode::Legacy,
                 key_event::Union::ControlKey(ControlKey::Hanja.into()),
             ),
-            key_event(KeyboardMode::Translate, key_event::Union::Seq("한".to_owned())),
+            key_event(
+                KeyboardMode::Translate,
+                key_event::Union::Seq("한".to_owned()),
+            ),
         ];
         for evt in cases {
             assert_eq!(toggle_key(&evt), None, "{:?}", evt);

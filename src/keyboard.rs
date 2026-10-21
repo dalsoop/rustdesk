@@ -200,7 +200,13 @@ pub mod client {
                 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
                 KEYBOARD_HOOKED.store(true, Ordering::SeqCst);
                 #[cfg(target_os = "macos")]
-                crate::platform::macos_input_source::suspend_input_source_hotkeys(true);
+                {
+                    use crate::platform::macos_input_source::set_remote_keyboard_active;
+                    set_remote_keyboard_active(session_id, true, "keyboard grab");
+                    if let Some(prev) = gs.owner {
+                        set_remote_keyboard_active(prev, false, "keyboard grab moved");
+                    }
+                }
 
                 #[cfg(target_os = "linux")]
                 let had_owner = gs.owner.is_some();
@@ -294,7 +300,11 @@ pub mod client {
                 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
                 KEYBOARD_HOOKED.store(false, Ordering::SeqCst);
                 #[cfg(target_os = "macos")]
-                crate::platform::macos_input_source::suspend_input_source_hotkeys(false);
+                crate::platform::macos_input_source::set_remote_keyboard_active(
+                    session_id,
+                    false,
+                    "keyboard grab released",
+                );
 
                 gs.owner = None;
                 gs.last_grab = None;

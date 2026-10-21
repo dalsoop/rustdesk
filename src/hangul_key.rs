@@ -118,14 +118,26 @@ pub fn to_peer_hangul_key(peer: &str, event: &Event, key_event: &KeyEvent) -> Op
     if !LocalConfig::get_bool_option(OPTION_ENABLE_PEER_HANGUL_KEY) {
         return None;
     }
-    let mut evt = convert(
+    let converted = convert(
         LOCAL_OS,
         peer,
         event.position_code,
         event.platform_code,
         down,
         key_event,
-    )?;
+    );
+    if down {
+        match &converted {
+            Some(evt) => hbb_common::log::info!(
+                "Local 한/영 key sent to {} peer as {:?} ({:?} mode)",
+                peer,
+                evt.union,
+                evt.mode
+            ),
+            None => hbb_common::log::info!("Local 한/영 key sent to {} peer unchanged", peer),
+        }
+    }
+    let mut evt = converted?;
     if evt.mode.enum_value_or(KeyboardMode::Legacy) == KeyboardMode::Legacy {
         let (alt, ctrl, shift, command) =
             crate::keyboard::client::get_modifiers_state(false, false, false, false);
@@ -172,23 +184,42 @@ mod tests {
     fn hangul_key_becomes_the_peer_hangul_key() {
         for mode in [KeyboardMode::Map, KeyboardMode::Translate] {
             for key in [WIN_HANGUL, WIN_RALT_HANGUL, LINUX_HANGUL, LINUX_RALT_HANGUL] {
-                assert_eq!(keycode(send(key, "macos", mode)), Some((mode, 79)), "{key:?}");
+                assert_eq!(
+                    keycode(send(key, "macos", mode)),
+                    Some((mode, 79)),
+                    "{key:?}"
+                );
             }
             for key in [MAC_F18, WIN_HANGUL, WIN_RALT_HANGUL] {
-                assert_eq!(keycode(send(key, "linux", mode)), Some((mode, 130)), "{key:?}");
+                assert_eq!(
+                    keycode(send(key, "linux", mode)),
+                    Some((mode, 130)),
+                    "{key:?}"
+                );
             }
             for key in [MAC_F18, LINUX_HANGUL, LINUX_RALT_HANGUL] {
                 assert!(is_legacy_hangul(send(key, "windows", mode)), "{key:?}");
             }
         }
-        for (key, peer) in [(MAC_F18, "windows"), (WIN_HANGUL, "macos"), (LINUX_HANGUL, "macos")] {
-            assert!(is_legacy_hangul(send(key, peer, KeyboardMode::Legacy)), "{key:?}");
+        for (key, peer) in [
+            (MAC_F18, "windows"),
+            (WIN_HANGUL, "macos"),
+            (LINUX_HANGUL, "macos"),
+        ] {
+            assert!(
+                is_legacy_hangul(send(key, peer, KeyboardMode::Legacy)),
+                "{key:?}"
+            );
         }
     }
 
     #[test]
     fn same_os_and_other_keys_are_unchanged() {
-        for mode in [KeyboardMode::Map, KeyboardMode::Translate, KeyboardMode::Legacy] {
+        for mode in [
+            KeyboardMode::Map,
+            KeyboardMode::Translate,
+            KeyboardMode::Legacy,
+        ] {
             assert!(send(MAC_F18, "macos", mode).is_none());
             assert!(send(WIN_HANGUL, "windows", mode).is_none());
             assert!(send(LINUX_HANGUL, "linux", mode).is_none());
@@ -198,6 +229,35 @@ mod tests {
             assert!(send((Os::MacOS, 80, 80), "windows", mode).is_none());
             assert!(send((Os::Linux, 131, 0xff34), "macos", mode).is_none());
         }
+    }
+
+    // Without Input Monitoring the macOS client gets keys from Flutter: USB HID
+    // usage -> rdev key -> macOS keycode, as in
+    // `Session::_handle_key_non_flutter_simulation`. F18 (Caps Lock) must come
+    // out as the local 한/영 key.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn flutter_f18_on_macos_is_the_local_hangul_key() {
+        let key = rdev::usb_hid_key_from_code(0x6D);
+        let code = rdev::code_from_key(key).map(|c| c as u32);
+        assert_eq!(code, Some(MAC_KVK_F18));
+        let code = MAC_KVK_F18;
+        assert!(is_local_hangul_key(Os::MacOS, code, code));
+        let mut key_event = KeyEvent::new();
+        key_event.mode = KeyboardMode::Map.into();
+        assert!(convert(Os::MacOS, "macos", code, code, true, &key_event).is_none());
+        assert_eq!(
+            keycode(convert(Os::MacOS, "linux", code, code, true, &key_event)),
+            Some((KeyboardMode::Map, 130))
+        );
+        assert!(is_legacy_hangul(convert(
+            Os::MacOS,
+            "windows",
+            code,
+            code,
+            true,
+            &key_event
+        )));
     }
 
     #[test]
