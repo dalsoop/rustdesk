@@ -419,9 +419,21 @@ class _GeneralState extends State<_General> {
         if (!isWeb) audio(context),
         if (!isWeb) record(context),
         if (!isWeb) WaylandCard(),
+        if (!isWeb && !bind.isIncomingOnly()) keyboard(),
         other()
       ],
     ).marginOnly(bottom: _kListViewBottomMargin);
+  }
+
+  Widget keyboard() {
+    return _Card(title: 'Keyboard Settings', children: [
+      _OptionCheckBox(
+        context,
+        "Send my Korean/English key as the remote computer's Korean/English key",
+        kOptionEnablePeerHangulKey,
+        isServer: false,
+      ),
+    ]);
   }
 
   Widget theme() {

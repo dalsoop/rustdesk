@@ -180,6 +180,8 @@ pub const OPTION_KEEP_AWAKE_DURING_INCOMING_SESSIONS: &str = "keep-awake-during-
 
 // Client-side: keep client system awake during outgoing sessions (General setting)
 pub const OPTION_KEEP_AWAKE_DURING_OUTGOING_SESSIONS: &str = "keep-awake-during-outgoing-sessions";
+// Send the local 한/영 key as the peer OS's own 한/영 key.
+pub const OPTION_ENABLE_PEER_HANGUL_KEY: &str = "enable-peer-hangul-key";
 
 pub const OPTION_DISABLE_GROUP_PANEL: &str = "disable-group-panel";
 pub const OPTION_DISABLE_DISCOVERY_PANEL: &str = "disable-discovery-panel";
@@ -246,6 +248,7 @@ pub const KEYS_LOCAL_SETTINGS: &[&str] = &[
     OPTION_KEEP_SCREEN_ON,
     // Client-side: keep client system awake during outgoing sessions (General setting)
     OPTION_KEEP_AWAKE_DURING_OUTGOING_SESSIONS,
+    OPTION_ENABLE_PEER_HANGUL_KEY,
     OPTION_DISABLE_GROUP_PANEL,
     OPTION_DISABLE_DISCOVERY_PANEL,
     OPTION_PRE_ELEVATE_SERVICE,

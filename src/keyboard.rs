@@ -960,6 +960,11 @@ pub fn event_to_key_events(
     let mut key_event = KeyEvent::new();
     key_event.mode = keyboard_mode.into();
 
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    if let Some(evt) = crate::hangul_key::to_peer_hangul_key(&peer, event, &key_event) {
+        return vec![evt];
+    }
+
     let mut key_events = match keyboard_mode {
         KeyboardMode::Map => map_keyboard_mode(peer.as_str(), event, key_event),
         KeyboardMode::Translate => translate_keyboard_mode(peer.as_str(), event, key_event),
