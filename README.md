@@ -1,3 +1,43 @@
+# RustDesk Korean (rustdesk-korean)
+
+**한국어 사용자를 위한 RustDesk 1.5.0 포크입니다.** 원격 접속 중에도 한/영 키가 운영체제와 관계없이 동작하게 하고, 안드로이드 화면 키보드로 한글을 칠 때 글자가 부서지는 문제를 고쳤습니다.
+
+> A RustDesk 1.5.0 fork for Korean users: the 한/영 (Korean/English) key works between macOS, Windows, Linux and Android, and Android soft-keyboard Hangul input no longer breaks into jamo. Upstream: [rustdesk/rustdesk](https://github.com/rustdesk/rustdesk).
+
+## 무엇이 다른가
+
+| | 원본 RustDesk | 이 포크 |
+|---|---|---|
+| 맥을 원격으로 조종할 때 한/영 | 바뀌지 않습니다(macOS 가 프로그램이 넣은 단축키를 무시함) | 조종당하는 맥이 받은 한/영 키(F18·LANG1·Hangul)로 입력 소스를 직접 바꿉니다 |
+| 다른 운영체제끼리 한/영 | 키가 버려지거나 아무 일도 하지 않습니다 | 내 한/영 키를 상대 운영체제의 한/영 키로 바꿔 보냅니다(맥 F18, 윈도우 VK_HANGUL, 리눅스 Hangul) |
+| 맥에서 조종할 때 내 맥의 한/영 | 내 맥이 먼저 바뀌고 원격에는 가지 않습니다 | 원격 창이 키보드를 가진 동안 내 맥의 한/영 단축키를 잠시 끕니다(입력 모니터링 권한 없어도 됨) |
+| 맥의 "내 한/영 키" | — | 그 맥의 입력 소스 단축키(F18, ⌃Space 등)와 LANG1 키를 스스로 읽습니다 |
+| 휴대폰 화면 키보드로 한글 | `안녕하세요` 가 `ㅇㄴㅎ세요` 로 들어갑니다(#7727) | 완성된 글자로 들어갑니다 |
+| 휴대폰 한/영 버튼 | 없습니다 | 상대 운영체제에 맞는 키를 자동으로 보냅니다 |
+| 맥 키보드 메뉴 "입력 소스 1·2" | 이름만 있습니다 | 각 항목 아래에 뜻과 입력 모니터링 권한 상태를 보여 줍니다 |
+
+설정과 동작의 자세한 설명은 **[KOREAN.md](KOREAN.md)** 에 있습니다.
+
+## 내려받기
+
+[Releases](https://github.com/dalsoop/rustdesk-korean/releases) 에서 받습니다. 시험판(`1.5.0-ko.N`)으로 내고 있습니다.
+
+| 플랫폼 | 파일 | 비고 |
+|---|---|---|
+| macOS (Apple Silicon) | `rustdesk-1.5.0-ko.N-macos-aarch64.zip` | Developer ID 서명·공증. 공식 판을 바꾸면 화면 기록·손쉬운 사용 권한을 다시 켜야 하고, 공식 자동 업데이트는 꺼야 합니다 |
+| Windows x64 | `rustdesk-1.5.0-ko.N-x86_64.msi` / `.exe` | 서명하지 않은 빌드라 처음 실행할 때 SmartScreen 경고가 뜹니다 |
+| Linux x64 (.deb) | `rustdesk-1.5.0-x86_64.deb` | Pop!_OS 24.04 에서 확인했습니다 |
+| Android arm64 | `rustdesk-1.5.0-ko.N-aarch64.apk` | 이 포크의 이전 판 위에 업데이트로 설치됩니다 |
+
+## 브랜치와 라이선스
+
+- 기본 브랜치 `feat/sync-upstream-1.5.0` 이 원본 1.5.0 위에 이 포크의 변경을 얹은 정본입니다.
+- 원본 RustDesk 와 같은 **AGPL-3.0** 입니다. 각 릴리스 파일의 소스는 그 릴리스가 가리키는 커밋입니다.
+
+---
+
+아래는 원본 RustDesk 의 README 입니다.
+
 <p align="center">
   <img src="res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
   <a href="#raw-steps-to-build">Build</a> •

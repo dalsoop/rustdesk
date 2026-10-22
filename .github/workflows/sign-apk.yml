@@ -17,7 +17,7 @@ jobs:
 
       - name: Download unsigned APK from release
         run: |
-          curl -L -o rustdesk-unsigned.apk "https://github.com/dalsoop/rustdesk/releases/download/v1.5.0-korean-fix/rustdesk-1.5.0-aarch64.apk"
+          curl -L -o rustdesk-unsigned.apk "https://github.com/dalsoop/rustdesk-korean/releases/download/v1.5.0-korean-fix/rustdesk-1.5.0-aarch64.apk"
           ls -lh rustdesk-unsigned.apk
 
       - name: Generate Keystore and Sign APK
@@ -51,4 +51,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload v1.5.0-korean-fix rustdesk-1.5.0-aarch64.apk --clobber --repo dalsoop/rustdesk
+          gh release upload v1.5.0-korean-fix rustdesk-1.5.0-aarch64.apk --clobber --repo dalsoop/rustdesk-korean

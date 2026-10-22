@@ -1,9 +1,9 @@
-# RustDesk 한글 입력 포크 (안드로이드)
+# RustDesk Korean — 한글·한/영 포크
 
-원본 RustDesk 1.5.0 에 안드로이드 한글 입력 수정을 얹은 포크입니다. 휴대폰 키보드로 원격 컴퓨터에 한글을 칠 때 글자가 자모로 부서지는 문제를 고치고, 원격 컴퓨터의 한/영 상태를 맞추는 기능을 더했습니다.
+원본 RustDesk 1.5.0 에 한국어 사용자를 위한 수정을 얹은 포크입니다. 원격 접속 중에도 한/영 키가 맥·윈도우·리눅스·안드로이드 사이에서 동작하게 하고, 휴대폰 키보드로 원격 컴퓨터에 한글을 칠 때 글자가 자모로 부서지는 문제를 고쳤습니다.
 
 - 소스: 이 저장소의 기본 브랜치 `feat/sync-upstream-1.5.0`
-- 내려받기: [Releases](https://github.com/dalsoop/rustdesk/releases) 의 `rustdesk-1.5.0-ko.N-aarch64.apk`
+- 내려받기: [Releases](https://github.com/dalsoop/rustdesk-korean/releases). 플랫폼별 파일은 [README](README.md#내려받기) 에 있습니다
 - 상태: 시험판(prerelease)입니다. 아래 "시험한 범위" 밖에서는 확인하지 않았습니다.
 
 ## 무엇이 다른가
