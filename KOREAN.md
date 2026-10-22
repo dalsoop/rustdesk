@@ -149,6 +149,29 @@ macOS 는 입력 소스 단축키(예: ⌃Space, 또는 Caps Lock 을 F18 로 �
 - adb 의 `input tap` 으로 원격 화면 위 도구줄을 누르면, 버튼이 눌리지 않고 원격 화면 우클릭으로 처리됩니다. 원본의 접근성 입력 보정 코드가 터치 크기 1 인 입력을 하나 더 만들기 때문이며, 손가락 터치에는 해당하지 않습니다.
 - 같은 소스로 다시 빌드해도 APK 의 sha256 이 같게 나오지 않습니다. 릴리스마다 적힌 sha256 은 그 릴리스 파일의 값입니다.
 
+## 릴리스 (Releasing)
+
+포크 릴리스 번호(ko.N)는 `flutter/pubspec.yaml` 의 `version:` 한 줄에서만 올립니다. 빌드 번호는 "원본 빌드 번호 × 100 + N" 입니다(원본 1.5.0 은 68 이라 ko.9 는 `1.5.0+6809`).
+
+| 플랫폼 | 버전 (ko.9 예) | 어디서 나오나 |
+|---|---|---|
+| 리눅스 .deb | `1.5.0+ko9` (원본 `1.5.0` 보다 뒤로 정렬되어 apt 가 업그레이드로 봄) | `build.py` 의 `get_ko_release()` |
+| 윈도우 exe | 파일 버전 `1.5.0.6809` | Flutter 빌드 번호 |
+| 윈도우 msi | `1.5.0.6809` | `build-desktop-ko.yml` 이 빌드 번호를 `preprocess.py --revision-version` 으로 넘김 |
+| 안드로이드 | versionName `1.5.0-ko.9`, versionCode `6809` | `flutter/android/app/build.gradle` |
+| macOS | CFBundleShortVersionString `1.5.0`, CFBundleVersion `6809` | Flutter 빌드 번호 |
+| 정보 화면 | "버전: 1.5.0 (ko.9)" | `desktop_setting_page.dart` |
+
+RustDesk 프로토콜 버전(`Cargo.toml` 의 `1.5.0`)은 원본과 같게 둡니다. 다른 RustDesk 와 접속할 때 쓰는 값이라서입니다.
+
+순서:
+1. `version:` 줄의 끝 두 자리를 올리는 PR 을 기본 브랜치에 병합합니다.
+2. 맥: m5m2 에서 빌드하고, m5m1 에서 Developer ID(V2Z46YY386)로 서명·공증합니다(번들 ID `com.carriez.rustdesk` 그대로).
+3. 윈도우·리눅스: GitHub Actions `Build desktop (Korean fork, Windows/Linux x64)` 가 기본 브랜치 push 에서 돕니다.
+4. 안드로이드: gitlab `gujoai/apps/upstream-mono` 에 `rustdesk/` subtree 를 새 머리로 맞추는 MR 을 내면 pop-os 러너가 같은 서명 키로 APK 를 만듭니다.
+5. GitHub 릴리스 `1.5.0-ko.N` 에 네 플랫폼 파일과 `.sha256` 을 올립니다.
+6. pop-os 는 host-infra 의 `versions.rustdesk`(`1.5.0+koN`), sha256, 주소를 바꾸는 MR 로 올립니다.
+
 ## 라이선스
 
 원본 RustDesk 와 같은 AGPL-3.0 입니다. 릴리스 APK 의 소스는 각 릴리스가 가리키는 커밋입니다.
