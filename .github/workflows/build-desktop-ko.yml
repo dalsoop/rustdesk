@@ -8,7 +8,8 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - feat/macos-korean-toggle
+      - feat/sync-upstream-1.5.0
+      - "release/**"
     paths-ignore:
       - "**.md"
 
@@ -344,7 +345,9 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
           pushd ./res/msi
-          python preprocess.py --arp -d ../../rustdesk
+          # MSI version 1.5.0.<pubspec build number>, the same number as the exe's file version.
+          $build = (Select-String -Path ../../flutter/pubspec.yaml -Pattern '^version:\s*[\d.]+\+(\d+)').Matches[0].Groups[1].Value
+          python preprocess.py --arp -d ../../rustdesk --revision-version $build
           nuget restore msi.sln
           $msiPlatform = if ('${{ matrix.job.arch }}' -eq 'aarch64') { 'ARM64' } else { 'x64' }
           msbuild msi.sln -p:Configuration=Release -p:Platform=$msiPlatform /p:TargetVersion=Windows10

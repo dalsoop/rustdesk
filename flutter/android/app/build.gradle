@@ -103,7 +103,9 @@ android {
         minSdkVersion 22
         targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
+        // Korean fork: build number = upstream build * 100 + ko number (pubspec.yaml).
+        versionName flutterVersionCode.toInteger() >= 100 ?
+                "${flutterVersionName}-ko.${flutterVersionCode.toInteger() % 100}" : flutterVersionName
     }
 
     signingConfigs {

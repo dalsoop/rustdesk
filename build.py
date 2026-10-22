@@ -353,7 +353,24 @@ def get_features(args):
     return features
 
 
+def get_ko_release():
+    """Korean fork release number N from the flutter/pubspec.yaml build number
+    (upstream build * 100 + N), or None for an upstream build number."""
+    pubspec = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flutter', 'pubspec.yaml')
+    with open(pubspec, encoding='utf-8') as f:
+        for line in f:
+            m = re.match(r'^version:\s*[\d.]+\+(\d+)\s*$', line)
+            if m:
+                build = int(m.group(1))
+                return build % 100 if build >= 100 else None
+    return None
+
+
 def generate_control_file(version):
+    # "1.5.0+ko9" sorts after upstream "1.5.0", so apt sees each ko release as an upgrade.
+    ko = get_ko_release()
+    if ko is not None:
+        version = '%s+ko%d' % (version, ko)
     control_file_path = "../res/DEBIAN/control"
     system2('/bin/rm -rf %s' % control_file_path)
 

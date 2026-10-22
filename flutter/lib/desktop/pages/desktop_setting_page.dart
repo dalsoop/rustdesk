@@ -18,6 +18,7 @@ import 'package:flutter_hbb/models/printer_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -2518,12 +2519,20 @@ class _About extends StatefulWidget {
   State<_About> createState() => _AboutState();
 }
 
+/// " (ko.N)" for a Korean fork build: its build number is upstream build * 100 + N
+/// (pubspec.yaml), while the protocol version stays the upstream one.
+Future<String> _koReleaseSuffix() async {
+  if (isWeb) return '';
+  final build = int.tryParse((await PackageInfo.fromPlatform()).buildNumber);
+  return build != null && build >= 100 ? ' (ko.${build % 100})' : '';
+}
+
 class _AboutState extends State<_About> {
   @override
   Widget build(BuildContext context) {
     return futureBuilder(future: () async {
       final license = await bind.mainGetLicense();
-      final version = await bind.mainGetVersion();
+      final version = await bind.mainGetVersion() + await _koReleaseSuffix();
       final buildDate = await bind.mainGetBuildDate();
       final fingerprint = await bind.mainGetFingerprint();
       final myId = await bind.mainGetMyId();
