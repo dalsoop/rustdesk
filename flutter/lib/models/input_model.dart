@@ -1158,6 +1158,11 @@ class InputModel {
     if (!isInputSourceFlutter) {
       bind.sessionEnterOrLeave(sessionId: sessionId, enter: enter);
     }
+    // Also without the rdev grab (no Input Monitoring): macOS would otherwise
+    // run the 한/영 (F18) input-source hotkey locally instead of sending it.
+    if (isMacOS && !isViewCamera) {
+      bind.sessionSetRemoteKeyboardActive(sessionId: sessionId, active: enter);
+    }
     if (!isWeb && enter) {
       bind.setCurSessionId(sessionId: sessionId);
     }

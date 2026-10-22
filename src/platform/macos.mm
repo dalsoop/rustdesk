@@ -909,3 +909,79 @@ extern "C" bool MacSetPrivacyMode(bool on) {
         return TurnOffPrivacyModeInternal();
     }
 }
+
+#include <Carbon/Carbon.h>
+
+static bool IsKoreanInputSource(TISInputSourceRef source) {
+    CFStringRef sourceId = (CFStringRef)TISGetInputSourceProperty(source, kTISPropertyInputSourceID);
+    return sourceId && CFStringHasPrefix(sourceId, CFSTR("com.apple.inputmethod.Korean"));
+}
+
+static TISInputSourceRef CopyEnabledKoreanInputSource() {
+    CFArrayRef sources = TISCreateInputSourceList(NULL, false);
+    if (!sources) {
+        return NULL;
+    }
+    TISInputSourceRef found = NULL;
+    for (CFIndex i = 0; i < CFArrayGetCount(sources); i++) {
+        TISInputSourceRef source = (TISInputSourceRef)CFArrayGetValueAtIndex(sources, i);
+        CFBooleanRef selectable = (CFBooleanRef)TISGetInputSourceProperty(
+            source, kTISPropertyInputSourceIsSelectCapable);
+        if (selectable && CFBooleanGetValue(selectable) && IsKoreanInputSource(source)) {
+            found = (TISInputSourceRef)CFRetain(source);
+            break;
+        }
+    }
+    CFRelease(sources);
+    return found;
+}
+
+// macOS drops input-source hotkeys that arrive as synthetic events, so a remote
+// Korean/English key has to switch the input source through TIS. Returns false
+// when there is nothing to switch to (no Korean input source enabled).
+extern "C" bool MacToggleKoreanInputSource() {
+    TISInputSourceRef current = TISCopyCurrentKeyboardInputSource();
+    if (!current) {
+        return false;
+    }
+    bool korean = IsKoreanInputSource(current);
+    CFRelease(current);
+    TISInputSourceRef target = korean ? TISCopyCurrentASCIICapableKeyboardLayoutInputSource()
+                                      : CopyEnabledKoreanInputSource();
+    if (!target) {
+        return false;
+    }
+    OSStatus status = TISSelectInputSource(target);
+    CFRelease(target);
+    return status == noErr;
+}
+
+// Reads AppleSymbolicHotKeys[hotKey] from com.apple.symbolichotkeys. Writes the
+// enabled flag (1, 0, or -1 when missing) and up to maxParams of
+// value.parameters, and returns how many parameters the entry has: -3 when the
+// entry is absent, -1 when it has no parameters, -2 when one is not a number.
+extern "C" int MacReadSymbolicHotKey(int hotKey, int *enabled, long long *params, int maxParams) {
+    @autoreleasepool {
+        *enabled = -1;
+        CFPreferencesAppSynchronize(CFSTR("com.apple.symbolichotkeys"));
+        NSDictionary *domain =
+            [[NSUserDefaults standardUserDefaults] persistentDomainForName:@"com.apple.symbolichotkeys"];
+        NSDictionary *all = domain[@"AppleSymbolicHotKeys"];
+        if (![all isKindOfClass:[NSDictionary class]]) return -3;
+        NSDictionary *entry = all[[NSString stringWithFormat:@"%d", hotKey]];
+        if (![entry isKindOfClass:[NSDictionary class]]) return -3;
+        id flag = entry[@"enabled"];
+        if ([flag isKindOfClass:[NSNumber class]]) *enabled = [flag boolValue] ? 1 : 0;
+        NSDictionary *value = entry[@"value"];
+        if (![value isKindOfClass:[NSDictionary class]]) return -1;
+        NSArray *parameters = value[@"parameters"];
+        if (![parameters isKindOfClass:[NSArray class]]) return -1;
+        int n = 0;
+        for (id p in parameters) {
+            if (![p isKindOfClass:[NSNumber class]]) return -2;
+            if (n < maxParams) params[n] = [p longLongValue];
+            n++;
+        }
+        return n;
+    }
+}

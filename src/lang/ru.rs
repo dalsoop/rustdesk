@@ -780,6 +780,13 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("RustDesk could not load a GStreamer component needed for screen capture ({})", "RustDesk не удалось загрузить компонент GStreamer, необходимый для захвата экрана ({})"),
         ("Relay fallback delay in seconds", "Задержка перед переходом на ретранслятор в секундах"),
         ("relay-fallback-delay-tip", "Сколько времени уже установленное соединение через ретранслятор ждёт прямое соединение WebRTC, прежде чем будет использовано вместо него. Увеличьте, чтобы дать медленному прямому соединению больше времени; уменьшите, чтобы быстрее переходить на ретранслятор в сетях, где прямое соединение невозможно. Оставьте пустым для значения по умолчанию 2.5 секунды."),
-        ("To start a voice call, enable \"Audio capture\" on the \"Screen share\" page.", "Чтобы начать голосовой вызов, включите \"Захват аудио\" на странице \"Демонстрация экрана\" настроек.")
+        ("To start a voice call, enable \"Audio capture\" on the \"Screen share\" page.", "Чтобы начать голосовой вызов, включите \"Захват аудио\" на странице \"Демонстрация экрана\" настроек."),
+        ("Send my Korean/English key as the remote computer's Korean/English key", ""),
+        ("Send all keys · Mac shortcuts like ⌘Tab and ⌘Space go to the remote side too · Needs Input Monitoring", ""),
+        ("Send keys typed in the RustDesk window only · No permission needed · Mac shortcuts stay on this Mac", ""),
+        ("The Korean/English key reaches the remote side either way.", ""),
+        ("Input Monitoring: allowed", ""),
+        ("Input Monitoring: not allowed, so Input source 2 (RustDesk window keys only) is in use. Allow it, then restart RustDesk.", ""),
+        ("Open Input Monitoring settings", "")
     ].iter().cloned().collect();
 }

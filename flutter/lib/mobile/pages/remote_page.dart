@@ -1051,7 +1051,9 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
     final input = gFFI.inputModel;
     _remoteImeMode = null;
     _inKoreanRun = false;
-    switch (_koreanToggleKey) {
+    switch (resolveKoreanToggleKey(
+        _koreanToggleKey, gFFI.ffiModel.pi.platform)) {
+      case KoreanToggleKey.auto:
       case KoreanToggleKey.hangul:
         input.inputKey('VK_HANGUL');
         break;

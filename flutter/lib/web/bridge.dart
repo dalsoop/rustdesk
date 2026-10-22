@@ -512,6 +512,9 @@ class RustdeskImpl {
     js.context.callMethod('setByName', ['enter_or_leave', enter]);
   }
 
+  void sessionSetRemoteKeyboardActive(
+      {required UuidValue sessionId, required bool active, dynamic hint}) {}
+
   Future<void> sessionInputKey(
       {required UuidValue sessionId,
       required String name,

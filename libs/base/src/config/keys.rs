@@ -36,6 +36,8 @@ pub const OPTION_SYNC_AB_TAGS: &str = "sync-ab-tags";
 pub const OPTION_FILTER_AB_BY_INTERSECTION: &str = "filter-ab-by-intersection";
 pub const OPTION_ACCESS_MODE: &str = "access-mode";
 pub const OPTION_ENABLE_KEYBOARD: &str = "enable-keyboard";
+// macOS host: switch Korean/English through TIS for a remote F18/Hangul key.
+pub const OPTION_ENABLE_INPUT_SOURCE_TOGGLE: &str = "enable-input-source-toggle";
 pub const OPTION_ENABLE_CLIPBOARD: &str = "enable-clipboard";
 pub const OPTION_ENABLE_FILE_TRANSFER: &str = "enable-file-transfer";
 pub const OPTION_ENABLE_CAMERA: &str = "enable-camera";
@@ -178,6 +180,8 @@ pub const OPTION_KEEP_AWAKE_DURING_INCOMING_SESSIONS: &str = "keep-awake-during-
 
 // Client-side: keep client system awake during outgoing sessions (General setting)
 pub const OPTION_KEEP_AWAKE_DURING_OUTGOING_SESSIONS: &str = "keep-awake-during-outgoing-sessions";
+// Send the local 한/영 key as the peer OS's own 한/영 key.
+pub const OPTION_ENABLE_PEER_HANGUL_KEY: &str = "enable-peer-hangul-key";
 
 pub const OPTION_DISABLE_GROUP_PANEL: &str = "disable-group-panel";
 pub const OPTION_DISABLE_DISCOVERY_PANEL: &str = "disable-discovery-panel";
@@ -244,6 +248,7 @@ pub const KEYS_LOCAL_SETTINGS: &[&str] = &[
     OPTION_KEEP_SCREEN_ON,
     // Client-side: keep client system awake during outgoing sessions (General setting)
     OPTION_KEEP_AWAKE_DURING_OUTGOING_SESSIONS,
+    OPTION_ENABLE_PEER_HANGUL_KEY,
     OPTION_DISABLE_GROUP_PANEL,
     OPTION_DISABLE_DISCOVERY_PANEL,
     OPTION_PRE_ELEVATE_SERVICE,
@@ -272,6 +277,7 @@ pub const KEYS_LOCAL_SETTINGS: &[&str] = &[
 pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_ACCESS_MODE,
     OPTION_ENABLE_KEYBOARD,
+    OPTION_ENABLE_INPUT_SOURCE_TOGGLE,
     OPTION_ENABLE_CLIPBOARD,
     OPTION_ENABLE_FILE_TRANSFER,
     OPTION_ENABLE_CAMERA,

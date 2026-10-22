@@ -780,6 +780,13 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("RustDesk could not load a GStreamer component needed for screen capture ({})", "RustDesk स्क्रीन कैप्चर के लिए आवश्यक GStreamer घटक लोड नहीं कर सका ({})"),
         ("Relay fallback delay in seconds", "रिले पर लौटने में विलंब सेकंड में"),
         ("relay-fallback-delay-tip", "पहले से स्थापित रिले कनेक्शन सीधे WebRTC कनेक्शन की कितनी देर प्रतीक्षा करता है, उसके बाद उसके स्थान पर उपयोग किया जाता है। धीमे सीधे कनेक्शन को अधिक समय देने के लिए बढ़ाएँ; जिन नेटवर्क पर सीधा कनेक्शन संभव नहीं है वहाँ जल्दी रिले पर जाने के लिए घटाएँ। डिफ़ॉल्ट 2.5 सेकंड के लिए खाली छोड़ें।"),
-        ("To start a voice call, enable \"Audio capture\" on the \"Screen share\" page.", "")
+        ("To start a voice call, enable \"Audio capture\" on the \"Screen share\" page.", ""),
+        ("Send my Korean/English key as the remote computer's Korean/English key", ""),
+        ("Send all keys · Mac shortcuts like ⌘Tab and ⌘Space go to the remote side too · Needs Input Monitoring", ""),
+        ("Send keys typed in the RustDesk window only · No permission needed · Mac shortcuts stay on this Mac", ""),
+        ("The Korean/English key reaches the remote side either way.", ""),
+        ("Input Monitoring: allowed", ""),
+        ("Input Monitoring: not allowed, so Input source 2 (RustDesk window keys only) is in use. Allow it, then restart RustDesk.", ""),
+        ("Open Input Monitoring settings", "")
     ].iter().cloned().collect();
 }

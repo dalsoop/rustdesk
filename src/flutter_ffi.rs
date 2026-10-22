@@ -2352,8 +2352,28 @@ pub fn main_is_installed() -> SyncReturn<bool> {
 }
 
 pub fn main_init_input_source() -> SyncReturn<()> {
+    #[cfg(target_os = "macos")]
+    crate::platform::macos_input_source::restore_hotkeys_left_suspended();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     crate::keyboard::input_source::init_input_source();
+    SyncReturn(())
+}
+
+/// A remote session window got (`active`) or lost the keyboard. On macOS the
+/// local input-source hotkeys are paused meanwhile, so 한/영 reaches the peer.
+pub fn session_set_remote_keyboard_active(session_id: SessionID, active: bool) -> SyncReturn<()> {
+    #[cfg(target_os = "macos")]
+    crate::platform::macos_input_source::set_remote_keyboard_active(
+        session_id.as_u128(),
+        active,
+        if active {
+            "remote window has the keyboard"
+        } else {
+            "remote window lost the keyboard"
+        },
+    );
+    #[cfg(not(target_os = "macos"))]
+    let _ = (session_id, active);
     SyncReturn(())
 }
 

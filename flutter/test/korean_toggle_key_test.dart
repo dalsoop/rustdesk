@@ -8,9 +8,27 @@ void main() {
     }
   });
 
-  test('empty or unknown option falls back to the Hangul key', () {
-    expect(koreanToggleKeyFromOption(''), KoreanToggleKey.hangul);
-    expect(koreanToggleKeyFromOption('f99'), KoreanToggleKey.hangul);
+  test('empty or unknown option falls back to automatic', () {
+    expect(koreanToggleKeyFromOption(''), KoreanToggleKey.auto);
+    expect(koreanToggleKeyFromOption('f99'), KoreanToggleKey.auto);
+  });
+
+  test('automatic sends F18 to a Mac and Hangul to Windows and Linux', () {
+    expect(resolveKoreanToggleKey(KoreanToggleKey.auto, 'Mac OS'),
+        KoreanToggleKey.f18);
+    expect(resolveKoreanToggleKey(KoreanToggleKey.auto, 'Windows'),
+        KoreanToggleKey.hangul);
+    expect(resolveKoreanToggleKey(KoreanToggleKey.auto, 'Linux'),
+        KoreanToggleKey.hangul);
+  });
+
+  test('a manual choice is kept for every peer', () {
+    for (final peer in ['Mac OS', 'Windows', 'Linux']) {
+      expect(resolveKoreanToggleKey(KoreanToggleKey.ctrlSpace, peer),
+          KoreanToggleKey.ctrlSpace);
+      expect(resolveKoreanToggleKey(KoreanToggleKey.hangul, peer),
+          KoreanToggleKey.hangul);
+    }
   });
 
   test('every choice has a label', () {
