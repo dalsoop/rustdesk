@@ -353,11 +353,14 @@ def get_features(args):
     return features
 
 
+# Resolved at import: the build changes the working directory before packaging.
+PUBSPEC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flutter', 'pubspec.yaml')
+
+
 def get_ko_release():
     """Korean fork release number N from the flutter/pubspec.yaml build number
     (upstream build * 100 + N), or None for an upstream build number."""
-    pubspec = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flutter', 'pubspec.yaml')
-    with open(pubspec, encoding='utf-8') as f:
+    with open(PUBSPEC_PATH, encoding='utf-8') as f:
         for line in f:
             m = re.match(r'^version:\s*[\d.]+\+(\d+)\s*$', line)
             if m:
